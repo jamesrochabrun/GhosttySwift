@@ -1,6 +1,8 @@
 import AppKit
 import GhosttyKit
 
+// Input routing is re-authored against upstream Ghostty MIT sources,
+// primarily SurfaceView_AppKit.swift, Ghostty.Input.swift, and NSEvent+Extension.swift.
 extension GhosttySurfaceView {
   override public func becomeFirstResponder() -> Bool {
     let accepted = super.becomeFirstResponder()
@@ -29,9 +31,42 @@ extension GhosttySurfaceView {
       return
     }
 
-    sendKey(
-      event,
-      action: event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS,
+    let translatedGhosttyModifiers = GhosttyKeyMap.eventModifierFlags(
+      from: ghostty_surface_key_translation_mods(surfaceHandle, GhosttyKeyMap.mods(from: event.modifierFlags))
+    )
+    var translationModifiers = event.modifierFlags
+
+    for flag in [NSEvent.ModifierFlags.shift, .control, .option, .command] {
+      if translatedGhosttyModifiers.contains(flag) {
+        translationModifiers.insert(flag)
+      } else {
+        translationModifiers.remove(flag)
+      }
+    }
+
+    let translationEvent: NSEvent
+    if translationModifiers == event.modifierFlags {
+      translationEvent = event
+    } else {
+      translationEvent = NSEvent.keyEvent(
+        with: event.type,
+        location: event.locationInWindow,
+        modifierFlags: translationModifiers,
+        timestamp: event.timestamp,
+        windowNumber: event.windowNumber,
+        context: nil,
+        characters: event.characters(byApplyingModifiers: translationModifiers) ?? "",
+        charactersIgnoringModifiers: event.charactersIgnoringModifiers ?? "",
+        isARepeat: event.isARepeat,
+        keyCode: event.keyCode
+      ) ?? event
+    }
+
+    _ = keyAction(
+      event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS,
+      event: event,
+      translationEvent: translationEvent,
+      text: translationEvent.ghosttyCharacters,
       to: surfaceHandle
     )
   }
@@ -42,7 +77,7 @@ extension GhosttySurfaceView {
       return
     }
 
-    sendKey(event, action: GHOSTTY_ACTION_RELEASE, to: surfaceHandle)
+    _ = keyAction(GHOSTTY_ACTION_RELEASE, event: event, to: surfaceHandle)
   }
 
   override public func flagsChanged(with event: NSEvent) {
@@ -51,15 +86,41 @@ extension GhosttySurfaceView {
       return
     }
 
-    guard let payload = GhosttyKeyMap.modifierEventPayload(
-      keyCode: event.keyCode,
-      modifierFlags: event.modifierFlags.rawValue
-    ) else {
+    let modifier: UInt32
+    switch event.keyCode {
+    case 0x39: modifier = GHOSTTY_MODS_CAPS.rawValue
+    case 0x38, 0x3C: modifier = GHOSTTY_MODS_SHIFT.rawValue
+    case 0x3B, 0x3E: modifier = GHOSTTY_MODS_CTRL.rawValue
+    case 0x3A, 0x3D: modifier = GHOSTTY_MODS_ALT.rawValue
+    case 0x37, 0x36: modifier = GHOSTTY_MODS_SUPER.rawValue
+    default:
       super.flagsChanged(with: event)
       return
     }
 
-    sendKeyPayload(payload, to: surfaceHandle)
+    let modifiers = GhosttyKeyMap.mods(from: event.modifierFlags)
+    var action = GHOSTTY_ACTION_RELEASE
+    if modifiers.rawValue & modifier != 0 {
+      let sidePressed: Bool
+      switch event.keyCode {
+      case 0x3C:
+        sidePressed = event.modifierFlags.rawValue & UInt(NX_DEVICERSHIFTKEYMASK) != 0
+      case 0x3E:
+        sidePressed = event.modifierFlags.rawValue & UInt(NX_DEVICERCTLKEYMASK) != 0
+      case 0x3D:
+        sidePressed = event.modifierFlags.rawValue & UInt(NX_DEVICERALTKEYMASK) != 0
+      case 0x36:
+        sidePressed = event.modifierFlags.rawValue & UInt(NX_DEVICERCMDKEYMASK) != 0
+      default:
+        sidePressed = true
+      }
+
+      if sidePressed {
+        action = GHOSTTY_ACTION_PRESS
+      }
+    }
+
+    _ = keyAction(action, event: event, to: surfaceHandle)
   }
 
   override public func mouseDown(with event: NSEvent) {
@@ -136,109 +197,31 @@ extension GhosttySurfaceView {
     guard window != nil else { return }
 
     let area = NSTrackingArea(
-      rect: bounds,
-      options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
+      rect: frame,
+      options: [.activeAlways, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
       owner: self,
       userInfo: nil
     )
     addTrackingArea(area)
   }
 
-  private func sendKey(
-    _ event: NSEvent,
-    action: ghostty_input_action_e,
+  private func keyAction(
+    _ action: ghostty_input_action_e,
+    event: NSEvent,
+    translationEvent: NSEvent? = nil,
+    text: String? = nil,
     to surface: ghostty_surface_t
-  ) {
-    let mods = GhosttyKeyMap.mods(from: event.modifierFlags.rawValue)
-    let translatedMods = ghostty_surface_key_translation_mods(surface, mods)
-    let translatedModifierFlags = resolvedTranslationModifierFlags(
-      from: event.modifierFlags,
-      translatedMods: translatedMods
-    )
-    let payload = GhosttyKeyMap.keyEventPayload(
-      keyCode: event.keyCode,
-      modifierFlags: event.modifierFlags.rawValue,
-      characters: ghosttyCharacters(for: event, translationModifiers: translatedModifierFlags),
-      charactersIgnoringModifiers: event.characters(byApplyingModifiers: []),
-      action: action,
-      consumedModifierFlags: translatedModifierFlags
-        .subtracting(NSEvent.ModifierFlags(arrayLiteral: .control, .command))
-        .rawValue
-    )
-    sendKeyPayload(payload, to: surface)
-  }
+  ) -> Bool {
+    var keyEvent = event.ghosttyKeyEvent(action, translationMods: translationEvent?.modifierFlags)
 
-  private func sendKeyPayload(_ payload: GhosttyKeyEventPayload, to surface: ghostty_surface_t) {
-    if let text = payload.text {
-      text.withCString { textPointer in
-        sendKeyPayload(payload, textPointer: textPointer, to: surface)
-      }
-    } else {
-      sendKeyPayload(payload, textPointer: nil, to: surface)
-    }
-  }
-
-  private func sendKeyPayload(
-    _ payload: GhosttyKeyEventPayload,
-    textPointer: UnsafePointer<CChar>?,
-    to surface: ghostty_surface_t
-  ) {
-    var input = ghostty_input_key_s()
-    input.action = payload.action
-    input.mods = payload.mods
-    input.consumed_mods = payload.consumedMods
-    input.keycode = payload.keycode
-
-    if let text = payload.text,
-      let firstByte = text.utf8.first,
-      firstByte >= 0x20
-    {
-      input.text = textPointer
-    } else {
-      input.text = nil
-    }
-
-    input.unshifted_codepoint = payload.unshiftedCodepoint
-    input.composing = payload.composing
-    _ = ghostty_surface_key(surface, input)
-  }
-
-  private func resolvedTranslationModifierFlags(
-    from original: NSEvent.ModifierFlags,
-    translatedMods: ghostty_input_mods_e
-  ) -> NSEvent.ModifierFlags {
-    let translated = GhosttyKeyMap.eventModifierFlags(from: translatedMods)
-    var result = original
-
-    for flag in [NSEvent.ModifierFlags.shift, .control, .option, .command] {
-      if translated.contains(flag) {
-        result.insert(flag)
-      } else {
-        result.remove(flag)
+    if let text, !text.isEmpty, let firstByte = text.utf8.first, firstByte >= 0x20 {
+      return text.withCString { pointer in
+        keyEvent.text = pointer
+        return ghostty_surface_key(surface, keyEvent)
       }
     }
 
-    return result
-  }
-
-  private func ghosttyCharacters(
-    for event: NSEvent,
-    translationModifiers: NSEvent.ModifierFlags
-  ) -> String? {
-    let characters = event.characters(byApplyingModifiers: translationModifiers) ?? event.characters
-    guard let characters else { return nil }
-
-    if characters.count == 1, let scalar = characters.unicodeScalars.first {
-      if scalar.value < 0x20 {
-        return event.characters(byApplyingModifiers: translationModifiers.subtracting(.control))
-      }
-
-      if scalar.value >= 0xF700 && scalar.value <= 0xF8FF {
-        return nil
-      }
-    }
-
-    return characters
+    return ghostty_surface_key(surface, keyEvent)
   }
 
   private enum MouseState {
@@ -254,7 +237,7 @@ extension GhosttySurfaceView {
     guard let surfaceHandle else { return }
     sendMousePos(event)
     let mouseState: ghostty_input_mouse_state_e = state == .press ? GHOSTTY_MOUSE_PRESS : GHOSTTY_MOUSE_RELEASE
-    let mods = GhosttyKeyMap.mods(from: event.modifierFlags.rawValue)
+    let mods = GhosttyKeyMap.mods(from: event.modifierFlags)
     _ = ghostty_surface_mouse_button(surfaceHandle, mouseState, button, mods)
   }
 
@@ -266,7 +249,7 @@ extension GhosttySurfaceView {
 
   private func sendMousePos(_ point: CGPoint, modifierFlags: NSEvent.ModifierFlags) {
     guard let surfaceHandle else { return }
-    let mods = GhosttyKeyMap.mods(from: modifierFlags.rawValue)
+    let mods = GhosttyKeyMap.mods(from: modifierFlags)
     ghostty_surface_mouse_pos(surfaceHandle, point.x, point.y, mods)
   }
 

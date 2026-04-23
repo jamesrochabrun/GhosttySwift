@@ -2,6 +2,8 @@ import AppKit
 import Foundation
 import GhosttyKit
 
+// Runtime behavior is re-authored against upstream Ghostty MIT sources,
+// primarily macos/Sources/Ghostty/Ghostty.App.swift plus ghostty.h.
 @MainActor
 public final class GhosttyRuntime {
   public enum RuntimeError: LocalizedError {
@@ -29,7 +31,7 @@ public final class GhosttyRuntime {
 
   private var configHandle: ghostty_config_t?
   private var appHandleStorage: ghostty_app_t?
-  private var observers: [NSObjectProtocol] = []
+  private var isObservingApplicationNotifications = false
 
   var appHandle: ghostty_app_t {
     guard let appHandleStorage else {
@@ -83,7 +85,9 @@ public final class GhosttyRuntime {
   }
 
   isolated deinit {
-    observers.forEach(NotificationCenter.default.removeObserver(_:))
+    if isObservingApplicationNotifications {
+      NotificationCenter.default.removeObserver(self)
+    }
     if let appHandleStorage {
       ghostty_app_free(appHandleStorage)
     }
@@ -97,41 +101,47 @@ public final class GhosttyRuntime {
   }
 
   private func installApplicationObservers() {
+    guard !isObservingApplicationNotifications else { return }
+
     let center = NotificationCenter.default
-    let appHandleBits = UInt(bitPattern: appHandle)
-
-    observers.append(
-      center.addObserver(
-        forName: NSTextInputContext.keyboardSelectionDidChangeNotification,
-        object: nil,
-        queue: .main
-      ) { _ in
-        guard let appHandle = UnsafeMutableRawPointer(bitPattern: appHandleBits) else { return }
-        ghostty_app_keyboard_changed(appHandle)
-      }
+    center.addObserver(
+      self,
+      selector: #selector(keyboardSelectionDidChange(notification:)),
+      name: NSTextInputContext.keyboardSelectionDidChangeNotification,
+      object: nil
+    )
+    center.addObserver(
+      self,
+      selector: #selector(applicationDidBecomeActive(notification:)),
+      name: NSApplication.didBecomeActiveNotification,
+      object: nil
+    )
+    center.addObserver(
+      self,
+      selector: #selector(applicationDidResignActive(notification:)),
+      name: NSApplication.didResignActiveNotification,
+      object: nil
     )
 
-    observers.append(
-      center.addObserver(
-        forName: NSApplication.didBecomeActiveNotification,
-        object: nil,
-        queue: .main
-      ) { _ in
-        guard let appHandle = UnsafeMutableRawPointer(bitPattern: appHandleBits) else { return }
-        ghostty_app_set_focus(appHandle, true)
-      }
-    )
+    isObservingApplicationNotifications = true
+  }
 
-    observers.append(
-      center.addObserver(
-        forName: NSApplication.didResignActiveNotification,
-        object: nil,
-        queue: .main
-      ) { _ in
-        guard let appHandle = UnsafeMutableRawPointer(bitPattern: appHandleBits) else { return }
-        ghostty_app_set_focus(appHandle, false)
-      }
-    )
+  @objc
+  private func keyboardSelectionDidChange(notification: NSNotification) {
+    guard let appHandleStorage else { return }
+    ghostty_app_keyboard_changed(appHandleStorage)
+  }
+
+  @objc
+  private func applicationDidBecomeActive(notification: NSNotification) {
+    guard let appHandleStorage else { return }
+    ghostty_app_set_focus(appHandleStorage, true)
+  }
+
+  @objc
+  private func applicationDidResignActive(notification: NSNotification) {
+    guard let appHandleStorage else { return }
+    ghostty_app_set_focus(appHandleStorage, false)
   }
 
   private static func loadConfig(configPath: String?) -> ghostty_config_t? {

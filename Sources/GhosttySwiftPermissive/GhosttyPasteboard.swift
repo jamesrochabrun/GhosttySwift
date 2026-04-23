@@ -2,7 +2,23 @@ import AppKit
 import GhosttyKit
 import UniformTypeIdentifiers
 
+enum GhosttyShell {
+  private static let escapeCharacters = "\\ ()[]{}<>\"'`!#$&;|*?\t"
+
+  static func escape(_ value: String) -> String {
+    var result = value
+
+    for character in escapeCharacters {
+      result = result.replacing(String(character), with: "\\\(character)")
+    }
+
+    return result
+  }
+}
+
 extension NSPasteboard.PasteboardType {
+  // Re-authored against upstream Ghostty MIT sources,
+  // primarily Helpers/Extensions/NSPasteboard+Extension.swift.
   init?(mimeType: String) {
     switch mimeType {
     case "text/plain":
@@ -22,18 +38,6 @@ extension NSPasteboard.PasteboardType {
 }
 
 extension NSPasteboard {
-  private static let ghosttyEscapeCharacters = "\\ ()[]{}<>\"'`!#$&;|*?\t"
-
-  static func ghosttyEscape(_ value: String) -> String {
-    var result = value
-
-    for character in ghosttyEscapeCharacters {
-      result = result.replacing(String(character), with: "\\\(character)")
-    }
-
-    return result
-  }
-
   @MainActor
   static let ghosttySelection: NSPasteboard = {
     NSPasteboard(name: .init("com.mitchellh.ghostty.selection"))
@@ -43,7 +47,7 @@ extension NSPasteboard {
   func getOpinionatedStringContents() -> String? {
     if let urls = readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty {
       return urls
-        .map { $0.isFileURL ? Self.ghosttyEscape($0.path) : $0.absoluteString }
+        .map { $0.isFileURL ? GhosttyShell.escape($0.path) : $0.absoluteString }
         .joined(separator: " ")
     }
 
