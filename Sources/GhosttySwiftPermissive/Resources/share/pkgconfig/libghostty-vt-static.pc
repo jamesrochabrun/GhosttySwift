@@ -1,0 +1,12 @@
+prefix=/Users/jamesrochabrun/Desktop/git/GhosttySwiftPermissive/ThirdParty/ghostty/zig-out
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: libghostty-vt-static
+URL: https://github.com/ghostty-org/ghostty
+Description: Ghostty VT library (static)
+Version: 0.1.0-dev
+Cflags: -I${includedir}
+Libs: ${libdir}/libghostty-vt.a
+Libs.private: 
+Requires.private: 
