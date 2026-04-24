@@ -178,10 +178,15 @@ public final class GhosttySurfaceBridge {
       return true
 
     case GHOSTTY_ACTION_START_SEARCH:
-      let needle = action.action.start_search.needle.map { String(cString: $0) }
-      var state = searchState ?? GhosttySurfaceSearchState()
-      state.needle = needle
-      searchState = state
+      let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
+      if var state = searchState {
+        if !needle.isEmpty {
+          state.needle = needle
+          searchState = state
+        }
+      } else {
+        searchState = GhosttySurfaceSearchState(needle: needle, total: nil, selected: nil)
+      }
       onStateChange?()
       return true
 

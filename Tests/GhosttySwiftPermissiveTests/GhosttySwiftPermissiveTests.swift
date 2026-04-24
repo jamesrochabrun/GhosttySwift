@@ -1,4 +1,5 @@
 import Testing
+import GhosttyKit
 @testable import GhosttySwiftPermissive
 
 @Test
@@ -35,4 +36,77 @@ func terminalViewCanBeConstructedFromController() throws {
 
   #expect(controller.title == "Ghostty")
   #expect(String(describing: type(of: view)).contains("GhosttyTerminalView"))
+}
+
+@Test
+func childExitBannerFormatsSuccessAndFailure() {
+  let success = GhosttyTerminalOverlayModel.makeChildExitBanner(
+    from: GhosttySurfaceChildExitInfo(exitCode: 0, runtimeMilliseconds: 1234)
+  )
+  let failure = GhosttyTerminalOverlayModel.makeChildExitBanner(
+    from: GhosttySurfaceChildExitInfo(exitCode: 7, runtimeMilliseconds: 2500)
+  )
+
+  #expect(success.title == "Process completed")
+  #expect(success.isError == false)
+  #expect(success.subtitle.contains("1.2s"))
+
+  #expect(failure.title == "Process exited")
+  #expect(failure.isError == true)
+  #expect(failure.subtitle.contains("Exit code 7"))
+}
+
+@MainActor
+@Test
+func emptyStartSearchDoesNotClearExistingNeedle() {
+  let bridge = GhosttySurfaceBridge()
+
+  "abc".withCString { pointer in
+    var action = ghostty_action_s()
+    action.tag = GHOSTTY_ACTION_START_SEARCH
+    action.action.start_search = ghostty_action_start_search_s(needle: pointer)
+    #expect(bridge.handleAction(action))
+  }
+
+  #expect(bridge.searchState?.needle == "abc")
+
+  "".withCString { pointer in
+    var action = ghostty_action_s()
+    action.tag = GHOSTTY_ACTION_START_SEARCH
+    action.action.start_search = ghostty_action_start_search_s(needle: pointer)
+    #expect(bridge.handleAction(action))
+  }
+
+  #expect(bridge.searchState?.needle == "abc")
+}
+
+@MainActor
+@Test
+func overlayModelPreservesLocalNeedleAcrossSearchCountUpdates() throws {
+  let bridge = GhosttySurfaceBridge()
+  let controller = try GhosttyTerminalController(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    ),
+    bridge: bridge
+  )
+  let model = GhosttyTerminalOverlayModel(controller: controller)
+
+  "".withCString { pointer in
+    var action = ghostty_action_s()
+    action.tag = GHOSTTY_ACTION_START_SEARCH
+    action.action.start_search = ghostty_action_start_search_s(needle: pointer)
+    #expect(bridge.handleAction(action))
+  }
+
+  model.setSearchNeedle("hello")
+
+  var searchTotal = ghostty_action_s()
+  searchTotal.tag = GHOSTTY_ACTION_SEARCH_TOTAL
+  searchTotal.action.search_total = ghostty_action_search_total_s(total: 14)
+  #expect(bridge.handleAction(searchTotal))
+
+  model.sync(from: controller)
+
+  #expect(model.searchNeedle == "hello")
 }

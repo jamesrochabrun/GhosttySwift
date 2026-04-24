@@ -23,6 +23,8 @@ public final class GhosttyTerminalController {
   public var onCloseWindow: (() -> Void)?
   public var onDesktopNotification: ((GhosttySurfaceDesktopNotification) -> Void)?
 
+  var internalOnStateChange: ((GhosttyTerminalController) -> Void)?
+
   public init(
     runtime: GhosttyRuntime? = nil,
     configPath: String? = nil,
@@ -49,22 +51,59 @@ public final class GhosttyTerminalController {
     bridge.onClose = { [weak self] processAlive in
       guard let self else { return }
       self.lastSurfaceCloseProcessAlive = processAlive
+      self.internalOnStateChange?(self)
       self.onStateChange?(self)
       self.onClose?(processAlive)
     }
     bridge.onCloseWindow = { [weak self] in
       guard let self else { return }
+      self.internalOnStateChange?(self)
       self.onStateChange?(self)
       self.onCloseWindow?()
     }
     bridge.onDesktopNotification = { [weak self] notification in
       guard let self else { return }
       self.lastDesktopNotification = notification
+      self.internalOnStateChange?(self)
       self.onStateChange?(self)
       self.onDesktopNotification?(notification)
     }
 
     syncFromBridge()
+  }
+
+  public func focusTerminal() {
+    bridge.surfaceView?.claimFirstResponder()
+  }
+
+  @discardableResult
+  public func performBindingAction(_ action: String) -> Bool {
+    bridge.surfaceView?.performBindingAction(action) ?? false
+  }
+
+  @discardableResult
+  public func setSearchNeedle(_ needle: String) -> Bool {
+    return performBindingAction("search:\(needle)")
+  }
+
+  @discardableResult
+  public func endSearch() -> Bool {
+    performBindingAction("end_search")
+  }
+
+  @discardableResult
+  public func navigateSearchNext() -> Bool {
+    performBindingAction("navigate_search:next")
+  }
+
+  @discardableResult
+  public func navigateSearchPrevious() -> Bool {
+    performBindingAction("navigate_search:previous")
+  }
+
+  @discardableResult
+  public func scrollToRow(_ row: Int) -> Bool {
+    performBindingAction("scroll_to_row:\(max(0, row))")
   }
 
   private func syncFromBridge() {
@@ -78,6 +117,7 @@ public final class GhosttyTerminalController {
     searchState = bridge.searchState
     lastDesktopNotification = bridge.lastDesktopNotification
     childExitInfo = bridge.childExitInfo
+    internalOnStateChange?(self)
     onStateChange?(self)
   }
 }

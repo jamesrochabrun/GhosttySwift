@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 @MainActor
 public final class GhosttyTerminalContainerView: NSView {
@@ -8,6 +9,12 @@ public final class GhosttyTerminalContainerView: NSView {
   public let surfaceView: GhosttySurfaceView
 
   private let scrollView: GhosttySurfaceScrollView
+  private let overlayModel: GhosttyTerminalOverlayModel
+  private let searchOverlayHostingView: NSHostingView<GhosttyTerminalSearchOverlayHostView>
+  private let secureInputHostingView: NSHostingView<GhosttyTerminalSecureInputBadgeHostView>
+  private let childExitHostingView: NSHostingView<GhosttyTerminalChildExitBannerHostView>
+  private let scrollbarOverlayView: GhosttyTerminalScrollbarOverlayView
+  private var localKeyMonitor: Any?
 
   public init(controller: GhosttyTerminalController) throws {
     self.controller = controller
@@ -19,16 +26,58 @@ public final class GhosttyTerminalContainerView: NSView {
       bridge: controller.bridge
     )
     self.scrollView = GhosttySurfaceScrollView(surfaceView: surfaceView)
+    self.overlayModel = GhosttyTerminalOverlayModel(controller: controller)
+    self.scrollbarOverlayView = GhosttyTerminalScrollbarOverlayView(overlayModel: overlayModel)
+    self.searchOverlayHostingView = NSHostingView(
+      rootView: GhosttyTerminalSearchOverlayHostView(model: overlayModel)
+    )
+    self.secureInputHostingView = NSHostingView(
+      rootView: GhosttyTerminalSecureInputBadgeHostView(model: overlayModel)
+    )
+    self.childExitHostingView = NSHostingView(
+      rootView: GhosttyTerminalChildExitBannerHostView(model: overlayModel)
+    )
     super.init(frame: .zero)
 
     addSubview(scrollView)
+    addSubview(scrollbarOverlayView)
+    addSubview(searchOverlayHostingView)
+    addSubview(secureInputHostingView)
+    addSubview(childExitHostingView)
     scrollView.translatesAutoresizingMaskIntoConstraints = false
+    scrollbarOverlayView.translatesAutoresizingMaskIntoConstraints = false
+    searchOverlayHostingView.translatesAutoresizingMaskIntoConstraints = false
+    secureInputHostingView.translatesAutoresizingMaskIntoConstraints = false
+    childExitHostingView.translatesAutoresizingMaskIntoConstraints = false
+    searchOverlayHostingView.setContentHuggingPriority(.required, for: .horizontal)
+    searchOverlayHostingView.setContentHuggingPriority(.required, for: .vertical)
+    secureInputHostingView.setContentHuggingPriority(.required, for: .horizontal)
+    secureInputHostingView.setContentHuggingPriority(.required, for: .vertical)
+    childExitHostingView.setContentHuggingPriority(.required, for: .horizontal)
+    childExitHostingView.setContentHuggingPriority(.required, for: .vertical)
     NSLayoutConstraint.activate([
       scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
       scrollView.topAnchor.constraint(equalTo: topAnchor),
       scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
+      scrollbarOverlayView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+      scrollbarOverlayView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+      scrollbarOverlayView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+      scrollbarOverlayView.widthAnchor.constraint(equalToConstant: 10),
+      searchOverlayHostingView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+      searchOverlayHostingView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+      secureInputHostingView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+      secureInputHostingView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      childExitHostingView.centerXAnchor.constraint(equalTo: centerXAnchor),
+      childExitHostingView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
     ])
+
+    controller.internalOnStateChange = { [weak self, weak overlayModel] controller in
+      overlayModel?.sync(from: controller)
+      self?.scrollbarOverlayView.refresh()
+    }
+    installKeyMonitor()
+    scrollbarOverlayView.refresh()
   }
 
   public convenience init(
@@ -51,7 +100,90 @@ public final class GhosttyTerminalContainerView: NSView {
     fatalError("init(coder:) is not supported")
   }
 
+  isolated deinit {
+    if let localKeyMonitor {
+      NSEvent.removeMonitor(localKeyMonitor)
+    }
+  }
+
   public func focusTerminal() {
     surfaceView.claimFirstResponder()
+  }
+
+  private func installKeyMonitor() {
+    localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      guard let self else { return event }
+      return handleSearchKeyEvent(event) ? nil : event
+    }
+  }
+
+  private func handleSearchKeyEvent(_ event: NSEvent) -> Bool {
+    guard controller.searchState != nil else { return false }
+
+    let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    let key = event.charactersIgnoringModifiers?.lowercased()
+
+    if event.keyCode == 53 {
+      controller.endSearch()
+      return true
+    }
+
+    if mods == [.command], key == "g" {
+      controller.navigateSearchNext()
+      return true
+    }
+
+    if mods == [.command, .shift], key == "g" {
+      controller.navigateSearchPrevious()
+      return true
+    }
+
+    if mods == [.command, .shift], key == "f" {
+      controller.endSearch()
+      return true
+    }
+
+    if mods == [.command], key == "v" {
+      if let pastedString = NSPasteboard.general.string(forType: .string) {
+        overlayModel.setSearchNeedle(overlayModel.searchNeedle + pastedString)
+      }
+      return true
+    }
+
+    if mods.isSubset(of: [.shift, .option, .capsLock]) {
+      if event.keyCode == 36 || event.keyCode == 76 {
+        controller.navigateSearchNext()
+        return true
+      }
+
+      if event.keyCode == 51 || event.keyCode == 117 {
+        guard !overlayModel.searchNeedle.isEmpty else { return true }
+        overlayModel.setSearchNeedle(String(overlayModel.searchNeedle.dropLast()))
+        return true
+      }
+
+      if let insertedText = searchText(for: event) {
+        overlayModel.setSearchNeedle(overlayModel.searchNeedle + insertedText)
+        return true
+      }
+    }
+
+    return false
+  }
+
+  private func searchText(for event: NSEvent) -> String? {
+    guard let characters = event.characters, !characters.isEmpty else { return nil }
+
+    for scalar in characters.unicodeScalars {
+      if scalar.value < 0x20 {
+        return nil
+      }
+
+      if scalar.value >= 0xF700 && scalar.value <= 0xF8FF {
+        return nil
+      }
+    }
+
+    return characters
   }
 }

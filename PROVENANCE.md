@@ -60,6 +60,8 @@ Status meanings:
 | `Sources/GhosttySwiftPermissive/GhosttySurfaceConfiguration.swift` | fresh-wrapper | `ghostty.h` surface config API |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalController.swift` | fresh-wrapper | Apple Observation patterns, upstream Ghostty bridge/runtime behavior |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalContainerView.swift` | fresh-wrapper | Apple AppKit container patterns, upstream Ghostty surface host shape |
+| `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayModel.swift` | fresh-wrapper | upstream search/secure-input/child-exit/scrollbar interaction patterns |
+| `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceScrollView.swift`, `ChildExitedMessageBar.swift`, `Features/Secure Input/SecureInputOverlay.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
 | `Sources/GhosttySwiftPermissive/GhosttyTrace.swift` | non-product | local debug support |
 | `Sources/GhosttySwiftPermissiveSampleApp/*` | fresh-wrapper | local sample app only |

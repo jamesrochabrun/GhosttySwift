@@ -129,6 +129,16 @@ public final class GhosttySurfaceView: NSView {
     syncFocus()
   }
 
+  @discardableResult
+  func performBindingAction(_ action: String) -> Bool {
+    guard let surfaceHandle else { return false }
+    return ghostty_surface_binding_action(
+      surfaceHandle,
+      action,
+      UInt(action.lengthOfBytes(using: .utf8))
+    )
+  }
+
   private func installWindowObservers() {
     guard !isObservingWindowNotifications else { return }
     let center = NotificationCenter.default
