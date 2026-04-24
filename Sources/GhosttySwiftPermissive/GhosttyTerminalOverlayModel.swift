@@ -13,7 +13,6 @@ final class GhosttyTerminalOverlayModel: ObservableObject {
   @Published private(set) var secureInputEnabled = false
   @Published private(set) var searchState: GhosttySurfaceSearchState?
   @Published var searchNeedle = ""
-  @Published private(set) var scrollbar: GhosttySurfaceScrollbarState?
   @Published private(set) var cellSize: CGSize = .zero
   @Published private(set) var childExitBanner: ChildExitBanner?
 
@@ -29,7 +28,6 @@ final class GhosttyTerminalOverlayModel: ObservableObject {
 
   func sync(from controller: GhosttyTerminalController) {
     secureInputEnabled = controller.secureInputEnabled
-    scrollbar = controller.scrollbar
     cellSize = controller.cellSize
     searchState = controller.searchState
 
@@ -76,22 +74,6 @@ final class GhosttyTerminalOverlayModel: ObservableObject {
 
   func navigateSearchPrevious() {
     _ = controller.navigateSearchPrevious()
-  }
-
-  func scroll(trackHeight: CGFloat, thumbHeight: CGFloat, locationY: CGFloat) {
-    guard
-      let scrollbar,
-      scrollbar.total > scrollbar.length,
-      trackHeight > thumbHeight
-    else {
-      return
-    }
-
-    let maxOffset = Int(scrollbar.total - scrollbar.length)
-    let clampedY = min(max(locationY - (thumbHeight / 2), 0), trackHeight - thumbHeight)
-    let progress = clampedY / (trackHeight - thumbHeight)
-    let row = Int(progress * CGFloat(maxOffset))
-    _ = controller.scrollToRow(row)
   }
 
   func dismissChildExitBanner() {

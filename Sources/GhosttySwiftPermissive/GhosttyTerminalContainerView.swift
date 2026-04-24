@@ -13,7 +13,6 @@ public final class GhosttyTerminalContainerView: NSView {
   private let searchOverlayHostingView: NSHostingView<GhosttyTerminalSearchOverlayHostView>
   private let secureInputHostingView: NSHostingView<GhosttyTerminalSecureInputBadgeHostView>
   private let childExitHostingView: NSHostingView<GhosttyTerminalChildExitBannerHostView>
-  private let scrollbarOverlayView: GhosttyTerminalScrollbarOverlayView
   private var localKeyMonitor: Any?
 
   public init(controller: GhosttyTerminalController) throws {
@@ -25,9 +24,8 @@ public final class GhosttyTerminalContainerView: NSView {
       configuration: controller.configuration,
       bridge: controller.bridge
     )
-    self.scrollView = GhosttySurfaceScrollView(surfaceView: surfaceView)
+    self.scrollView = GhosttySurfaceScrollView(surfaceView: surfaceView, controller: controller)
     self.overlayModel = GhosttyTerminalOverlayModel(controller: controller)
-    self.scrollbarOverlayView = GhosttyTerminalScrollbarOverlayView(overlayModel: overlayModel)
     self.searchOverlayHostingView = NSHostingView(
       rootView: GhosttyTerminalSearchOverlayHostView(model: overlayModel)
     )
@@ -40,12 +38,10 @@ public final class GhosttyTerminalContainerView: NSView {
     super.init(frame: .zero)
 
     addSubview(scrollView)
-    addSubview(scrollbarOverlayView)
     addSubview(searchOverlayHostingView)
     addSubview(secureInputHostingView)
     addSubview(childExitHostingView)
     scrollView.translatesAutoresizingMaskIntoConstraints = false
-    scrollbarOverlayView.translatesAutoresizingMaskIntoConstraints = false
     searchOverlayHostingView.translatesAutoresizingMaskIntoConstraints = false
     secureInputHostingView.translatesAutoresizingMaskIntoConstraints = false
     childExitHostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -60,10 +56,6 @@ public final class GhosttyTerminalContainerView: NSView {
       scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
       scrollView.topAnchor.constraint(equalTo: topAnchor),
       scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-      scrollbarOverlayView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-      scrollbarOverlayView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-      scrollbarOverlayView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-      scrollbarOverlayView.widthAnchor.constraint(equalToConstant: 10),
       searchOverlayHostingView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
       searchOverlayHostingView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
       secureInputHostingView.topAnchor.constraint(equalTo: topAnchor, constant: 10),
@@ -74,10 +66,10 @@ public final class GhosttyTerminalContainerView: NSView {
 
     controller.internalOnStateChange = { [weak self, weak overlayModel] controller in
       overlayModel?.sync(from: controller)
-      self?.scrollbarOverlayView.refresh()
+      self?.scrollView.syncFromController()
     }
     installKeyMonitor()
-    scrollbarOverlayView.refresh()
+    scrollView.syncFromController()
   }
 
   public convenience init(

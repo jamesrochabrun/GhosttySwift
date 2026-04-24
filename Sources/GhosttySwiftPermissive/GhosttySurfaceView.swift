@@ -340,24 +340,238 @@ public final class GhosttySurfaceView: NSView {
 @MainActor
 final class GhosttySurfaceScrollView: NSView {
   let surfaceView: GhosttySurfaceView
+  private let controller: GhosttyTerminalController
+  private let scrollView = NSScrollView()
+  private let documentView = NSView()
+  private var isLiveScrolling = false
+  private var lastSentRow: Int?
 
-  init(surfaceView: GhosttySurfaceView) {
+  init(surfaceView: GhosttySurfaceView, controller: GhosttyTerminalController) {
     self.surfaceView = surfaceView
+    self.controller = controller
     super.init(frame: .zero)
 
-    addSubview(surfaceView)
-    surfaceView.translatesAutoresizingMaskIntoConstraints = false
-    NSLayoutConstraint.activate([
-      surfaceView.leadingAnchor.constraint(equalTo: leadingAnchor),
-      surfaceView.trailingAnchor.constraint(equalTo: trailingAnchor),
-      surfaceView.topAnchor.constraint(equalTo: topAnchor),
-      surfaceView.bottomAnchor.constraint(equalTo: bottomAnchor),
-    ])
+    scrollView.hasVerticalScroller = false
+    scrollView.hasHorizontalScroller = false
+    scrollView.autohidesScrollers = false
+    scrollView.usesPredominantAxisScrolling = true
+    scrollView.scrollerStyle = .overlay
+    scrollView.drawsBackground = false
+    scrollView.contentView.clipsToBounds = false
+
+    documentView.frame = .zero
+    scrollView.documentView = documentView
+    documentView.addSubview(surfaceView)
+
+    addSubview(scrollView)
+
+    scrollView.contentView.postsBoundsChangedNotifications = true
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleScrollChangeNotification(_:)),
+      name: NSView.boundsDidChangeNotification,
+      object: scrollView.contentView
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleWillStartLiveScroll(_:)),
+      name: NSScrollView.willStartLiveScrollNotification,
+      object: scrollView
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleDidEndLiveScroll(_:)),
+      name: NSScrollView.didEndLiveScrollNotification,
+      object: scrollView
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleDidLiveScroll(_:)),
+      name: NSScrollView.didLiveScrollNotification,
+      object: scrollView
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleScrollerStyleChangeNotification(_:)),
+      name: NSScroller.preferredScrollerStyleDidChangeNotification,
+      object: nil
+    )
+
+    synchronizeAppearance()
+    synchronizeScrollView()
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) is not supported")
+  }
+
+  isolated deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
+
+  override func layout() {
+    super.layout()
+
+    scrollView.frame = bounds
+    documentView.frame.size.width = scrollView.bounds.width
+    synchronizeSurfaceView()
+    synchronizeScrollView()
+  }
+
+  override func mouseMoved(with event: NSEvent) {
+    guard NSScroller.preferredScrollerStyle == .legacy else { return }
+    scrollView.flashScrollers()
+  }
+
+  override func updateTrackingAreas() {
+    trackingAreas.forEach(removeTrackingArea)
+    super.updateTrackingAreas()
+
+    guard let scroller = scrollView.verticalScroller, !scroller.isHidden else { return }
+    addTrackingArea(NSTrackingArea(
+      rect: convert(scroller.bounds, from: scroller),
+      options: [.mouseMoved, .activeInKeyWindow],
+      owner: self,
+      userInfo: nil
+    ))
+  }
+
+  func syncFromController() {
+    synchronizeAppearance()
+    synchronizeScrollView()
+  }
+
+  private func synchronizeAppearance() {
+    let hasScrollableContent = controller.scrollbar.map { $0.total > $0.length } ?? false
+    scrollView.hasVerticalScroller = hasScrollableContent
+    updateTrackingAreas()
+  }
+
+  private func synchronizeSurfaceView() {
+    let visibleRect = scrollView.contentView.documentVisibleRect
+    var frame = surfaceView.frame
+    frame.origin = visibleRect.origin
+    frame.size = scrollView.bounds.size
+    guard frame != surfaceView.frame else { return }
+    surfaceView.frame = frame
+    surfaceView.layoutSubtreeIfNeeded()
+  }
+
+  private func synchronizeScrollView() {
+    documentView.frame.size.height = Self.documentHeight(
+      contentHeight: scrollView.contentSize.height,
+      cellHeight: controller.cellSize.height,
+      scrollbar: controller.scrollbar
+    )
+
+    if
+      !isLiveScrolling,
+      let offsetY = Self.offsetY(
+        for: controller.scrollbar,
+        cellHeight: controller.cellSize.height
+      )
+    {
+      scrollView.contentView.scroll(to: CGPoint(x: 0, y: offsetY))
+      if let scrollbar = controller.scrollbar {
+        lastSentRow = Int(scrollbar.offset)
+      }
+    }
+
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+    synchronizeSurfaceView()
+  }
+
+  private func handleScrollChange() {
+    synchronizeSurfaceView()
+  }
+
+  private func handleScrollerStyleChange() {
+    scrollView.scrollerStyle = .overlay
+  }
+
+  private func handleLiveScroll() {
+    guard
+      let row = Self.rowForLiveScroll(
+        documentHeight: documentView.frame.height,
+        visibleOriginY: scrollView.contentView.documentVisibleRect.origin.y,
+        visibleHeight: scrollView.contentView.documentVisibleRect.height,
+        cellHeight: controller.cellSize.height
+      ),
+      row != lastSentRow
+    else {
+      return
+    }
+
+    lastSentRow = row
+    _ = controller.scrollToRow(row)
+  }
+
+  static func documentHeight(
+    contentHeight: CGFloat,
+    cellHeight: CGFloat,
+    scrollbar: GhosttySurfaceScrollbarState?
+  ) -> CGFloat {
+    guard
+      cellHeight > 0,
+      let scrollbar
+    else {
+      return contentHeight
+    }
+
+    let documentGridHeight = CGFloat(scrollbar.total) * cellHeight
+    let padding = contentHeight - (CGFloat(scrollbar.length) * cellHeight)
+    return max(contentHeight, documentGridHeight + padding)
+  }
+
+  static func offsetY(
+    for scrollbar: GhosttySurfaceScrollbarState?,
+    cellHeight: CGFloat
+  ) -> CGFloat? {
+    guard
+      cellHeight > 0,
+      let scrollbar
+    else {
+      return nil
+    }
+
+    return CGFloat(scrollbar.total - scrollbar.offset - scrollbar.length) * cellHeight
+  }
+
+  static func rowForLiveScroll(
+    documentHeight: CGFloat,
+    visibleOriginY: CGFloat,
+    visibleHeight: CGFloat,
+    cellHeight: CGFloat
+  ) -> Int? {
+    guard cellHeight > 0 else { return nil }
+    let scrollOffset = max(0, documentHeight - visibleOriginY - visibleHeight)
+    return Int(scrollOffset / cellHeight)
+  }
+
+  @objc
+  private func handleScrollChangeNotification(_ notification: Notification) {
+    handleScrollChange()
+  }
+
+  @objc
+  private func handleWillStartLiveScroll(_ notification: Notification) {
+    isLiveScrolling = true
+  }
+
+  @objc
+  private func handleDidEndLiveScroll(_ notification: Notification) {
+    isLiveScrolling = false
+  }
+
+  @objc
+  private func handleDidLiveScroll(_ notification: Notification) {
+    handleLiveScroll()
+  }
+
+  @objc
+  private func handleScrollerStyleChangeNotification(_ notification: Notification) {
+    handleScrollerStyleChange()
   }
 }
 

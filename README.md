@@ -17,7 +17,7 @@ current scope is the first clean milestone:
 - mouse forwarding
 - clipboard integration
 - one-line SwiftUI and AppKit embedding entry points
-- built-in search, secure-input, scrollbar, and child-exit overlays for embedded hosts
+- built-in search, secure-input, native scrollbar hosting, and child-exit UI for embedded hosts
 
 Not in scope yet:
 

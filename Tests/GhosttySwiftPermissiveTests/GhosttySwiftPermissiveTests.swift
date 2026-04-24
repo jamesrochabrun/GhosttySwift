@@ -110,3 +110,28 @@ func overlayModelPreservesLocalNeedleAcrossSearchCountUpdates() throws {
 
   #expect(model.searchNeedle == "hello")
 }
+
+@MainActor
+@Test
+func nativeScrollHostCalculatesDocumentHeightFromScrollback() {
+  let height = GhosttySurfaceScrollView.documentHeight(
+    contentHeight: 320,
+    cellHeight: 16,
+    scrollbar: GhosttySurfaceScrollbarState(total: 100, offset: 20, length: 20)
+  )
+
+  #expect(height == 1600)
+}
+
+@MainActor
+@Test
+func nativeScrollHostCalculatesRowFromLiveScrollPosition() {
+  let row = GhosttySurfaceScrollView.rowForLiveScroll(
+    documentHeight: 1600,
+    visibleOriginY: 960,
+    visibleHeight: 320,
+    cellHeight: 16
+  )
+
+  #expect(row == 20)
+}

@@ -50,7 +50,7 @@ Status meanings:
 | `Package.swift` | fresh-wrapper | upstream xcframework build shape and `example/swift-vt-xcframework/Package.swift` |
 | `THIRD_PARTY_NOTICES.md` | fresh-wrapper | upstream Ghostty LICENSE |
 | `Sources/GhosttySwiftPermissive/GhosttyRuntime.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.App.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift` |
+| `Sources/GhosttySwiftPermissive/GhosttySurfaceView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift`, `SurfaceScrollView.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttySurfaceView+Input.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift`, `NSEvent+Extension.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttyKeyMap.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.Input.swift`, `NSEvent+Extension.swift` |
 | `Sources/GhosttySwiftPermissive/NSEvent+Ghostty.swift` | fresh-wrapper | `macos/Sources/Ghostty/NSEvent+Extension.swift` |
@@ -59,8 +59,8 @@ Status meanings:
 | `Sources/GhosttySwiftPermissive/GhosttySurfaceBridge.swift` | fresh-wrapper | `ghostty.h`, `macos/Sources/Ghostty/Ghostty.App.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttySurfaceConfiguration.swift` | fresh-wrapper | `ghostty.h` surface config API |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalController.swift` | fresh-wrapper | Apple Observation patterns, upstream Ghostty bridge/runtime behavior |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalContainerView.swift` | fresh-wrapper | Apple AppKit container patterns, upstream Ghostty surface host shape |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayModel.swift` | fresh-wrapper | upstream search/secure-input/child-exit/scrollbar interaction patterns |
+| `Sources/GhosttySwiftPermissive/GhosttyTerminalContainerView.swift` | fresh-wrapper | Apple AppKit container patterns, upstream Ghostty surface host shape, `SurfaceScrollView.swift` |
+| `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayModel.swift` | fresh-wrapper | upstream search/secure-input/child-exit interaction patterns |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceScrollView.swift`, `ChildExitedMessageBar.swift`, `Features/Secure Input/SecureInputOverlay.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
 | `Sources/GhosttySwiftPermissive/GhosttyTrace.swift` | non-product | local debug support |
