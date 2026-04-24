@@ -48,15 +48,18 @@ Status meanings:
 | `ThirdParty/ghostty/` | upstream-vendored | Upstream Ghostty repo |
 | `Scripts/build-ghostty.sh` | fresh-wrapper | `build.zig`, `src/build/GhosttyXCFramework.zig` |
 | `Package.swift` | fresh-wrapper | upstream xcframework build shape and `example/swift-vt-xcframework/Package.swift` |
+| `THIRD_PARTY_NOTICES.md` | fresh-wrapper | upstream Ghostty LICENSE |
 | `Sources/GhosttySwiftPermissive/GhosttyRuntime.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.App.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceView.swift` | rewrite-queued | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift` |
+| `Sources/GhosttySwiftPermissive/GhosttySurfaceView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttySurfaceView+Input.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift`, `NSEvent+Extension.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttyKeyMap.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.Input.swift`, `NSEvent+Extension.swift` |
 | `Sources/GhosttySwiftPermissive/NSEvent+Ghostty.swift` | fresh-wrapper | `macos/Sources/Ghostty/NSEvent+Extension.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttyMouseMap.swift` | fresh-wrapper | upstream surface input handling |
 | `Sources/GhosttySwiftPermissive/GhosttyPasteboard.swift` | fresh-wrapper | `macos/Sources/Helpers/Extensions/NSPasteboard+Extension.swift`, `macos/Sources/Ghostty/Ghostty.App.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceBridge.swift` | fresh-wrapper | `ghostty.h` action surface plus upstream action handling |
+| `Sources/GhosttySwiftPermissive/GhosttySurfaceBridge.swift` | fresh-wrapper | `ghostty.h`, `macos/Sources/Ghostty/Ghostty.App.swift` |
 | `Sources/GhosttySwiftPermissive/GhosttySurfaceConfiguration.swift` | fresh-wrapper | `ghostty.h` surface config API |
+| `Sources/GhosttySwiftPermissive/GhosttyTerminalController.swift` | fresh-wrapper | Apple Observation patterns, upstream Ghostty bridge/runtime behavior |
+| `Sources/GhosttySwiftPermissive/GhosttyTerminalContainerView.swift` | fresh-wrapper | Apple AppKit container patterns, upstream Ghostty surface host shape |
 | `Sources/GhosttySwiftPermissive/GhosttyTerminalView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
 | `Sources/GhosttySwiftPermissive/GhosttyTrace.swift` | non-product | local debug support |
 | `Sources/GhosttySwiftPermissiveSampleApp/*` | fresh-wrapper | local sample app only |
@@ -66,9 +69,8 @@ Status meanings:
 
 These files should be treated as the first provenance-hardening targets:
 
-1. `GhosttySurfaceView.swift`
-2. `GhosttySurfaceBridge.swift`
-3. sample-app level session and tab APIs once they exist
+1. sample-app level session and tab APIs once they exist
+2. deeper regression tests for key, mouse, clipboard, and action handling
 
 The goal is not to copy upstream app-shell code wholesale. The goal is to
 re-author each wrapper directly from upstream MIT runtime and surface behavior.

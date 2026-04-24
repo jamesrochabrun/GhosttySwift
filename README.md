@@ -16,6 +16,7 @@ current scope is the first clean milestone:
 - keyboard forwarding
 - mouse forwarding
 - clipboard integration
+- one-line SwiftUI and AppKit embedding entry points
 
 Not in scope yet:
 
@@ -54,3 +55,82 @@ activates as a regular macOS app.
 - `ThirdParty/ghostty/` is upstream Ghostty under the MIT license and tracked as a git submodule.
 - `GhosttyKit.xcframework` is built locally from that upstream source and is
   intentionally ignored by git.
+- Adapted upstream MIT wrapper files and the preserved Ghostty license notice
+  are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Embed In SwiftUI
+
+```swift
+import GhosttySwiftPermissive
+import SwiftUI
+
+struct ContentView: View {
+  var body: some View {
+    GhosttyTerminalView(
+      configuration: GhosttySurfaceConfiguration(
+        workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+      )
+    )
+  }
+}
+```
+
+If you need to share one runtime across multiple surfaces, create a
+`GhosttyRuntime` yourself and pass it into `GhosttyTerminalView(runtime:...)`.
+
+## Embed In AppKit
+
+```swift
+import AppKit
+import GhosttySwiftPermissive
+
+let terminalView = try GhosttyTerminalContainerView(
+  configuration: GhosttySurfaceConfiguration(
+    workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+  )
+)
+```
+
+`GhosttyTerminalContainerView` owns the runtime, surface, and scroll wrapper
+for a single terminal host. Call `focusTerminal()` after inserting it into a
+window if you want to claim first responder immediately.
+
+## Observe Terminal State
+
+If an embedding app wants title, working-directory, search, or close state
+without reaching into the low-level bridge directly, create a
+`GhosttyTerminalController` and pass it into the view:
+
+```swift
+import GhosttySwiftPermissive
+import SwiftUI
+
+struct ContentView: View {
+  @State private var controller: GhosttyTerminalController?
+  @State private var windowTitle = "Ghostty"
+
+  var body: some View {
+    Group {
+      if let controller {
+        GhosttyTerminalView(controller: controller)
+      } else {
+        ProgressView()
+      }
+    }
+    .navigationTitle(windowTitle)
+    .task {
+      guard controller == nil else { return }
+      let controller = try? GhosttyTerminalController(
+        configuration: GhosttySurfaceConfiguration(
+          workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+        )
+      )
+      controller?.onStateChange = { controller in
+        windowTitle = controller.title
+      }
+      windowTitle = controller?.title ?? windowTitle
+      self.controller = controller
+    }
+  }
+}
+```

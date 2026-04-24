@@ -4,22 +4,6 @@ import GhosttyKit
 // Input routing is re-authored against upstream Ghostty MIT sources,
 // primarily SurfaceView_AppKit.swift, Ghostty.Input.swift, and NSEvent+Extension.swift.
 extension GhosttySurfaceView {
-  override public func becomeFirstResponder() -> Bool {
-    let accepted = super.becomeFirstResponder()
-    if accepted, let surfaceHandle {
-      ghostty_surface_set_focus(surfaceHandle, true)
-    }
-    return accepted
-  }
-
-  override public func resignFirstResponder() -> Bool {
-    let accepted = super.resignFirstResponder()
-    if accepted, let surfaceHandle {
-      ghostty_surface_set_focus(surfaceHandle, false)
-    }
-    return accepted
-  }
-
   override public func updateTrackingAreas() {
     super.updateTrackingAreas()
     installTrackingAreaIfNeeded()

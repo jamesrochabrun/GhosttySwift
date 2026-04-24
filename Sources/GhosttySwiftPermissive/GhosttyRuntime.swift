@@ -81,7 +81,7 @@ public final class GhosttyRuntime {
     self.appHandleStorage = app
 
     installApplicationObservers()
-    ghostty_app_set_focus(app, NSApp.isActive)
+    ghostty_app_set_focus(app, NSApp?.isActive == true)
   }
 
   isolated deinit {
@@ -270,22 +270,10 @@ public final class GhosttyRuntime {
     }
 
     switch action.tag {
-    case GHOSTTY_ACTION_SET_TITLE:
-      guard let bridgePointer = ghostty_surface_userdata(target.target.surface) else { return false }
-      let title = String(cString: action.action.set_title.title)
-      guard let bridge = bridge(from: bridgePointer) else { return false }
-      bridge.setTitle(title)
-      return true
-
-    case GHOSTTY_ACTION_MOUSE_SHAPE:
-      guard let bridgePointer = ghostty_surface_userdata(target.target.surface) else { return false }
-      let shape = action.action.mouse_shape
-      guard let bridge = bridge(from: bridgePointer) else { return false }
-      bridge.updateMouseShape(shape)
-      return true
-
     default:
-      return false
+      guard let bridgePointer = ghostty_surface_userdata(target.target.surface) else { return false }
+      guard let bridge = bridge(from: bridgePointer) else { return false }
+      return bridge.handleAction(action)
     }
   }
 

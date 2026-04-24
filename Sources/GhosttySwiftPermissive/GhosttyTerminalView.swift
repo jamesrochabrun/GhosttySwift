@@ -5,16 +5,40 @@ import SwiftUI
 public struct GhosttyTerminalView: NSViewRepresentable {
   public typealias NSViewType = NSView
 
-  private let runtime: GhosttyRuntime
+  private let controller: GhosttyTerminalController?
+  private let runtime: GhosttyRuntime?
+  private let configPath: String?
   private let configuration: GhosttySurfaceConfiguration
   private let bridge: GhosttySurfaceBridge
+
+  public init(controller: GhosttyTerminalController) {
+    self.controller = controller
+    self.runtime = nil
+    self.configPath = nil
+    self.configuration = controller.configuration
+    self.bridge = controller.bridge
+  }
 
   public init(
     runtime: GhosttyRuntime,
     configuration: GhosttySurfaceConfiguration = .init(),
     bridge: GhosttySurfaceBridge = GhosttySurfaceBridge()
   ) {
+    self.controller = nil
     self.runtime = runtime
+    self.configPath = nil
+    self.configuration = configuration
+    self.bridge = bridge
+  }
+
+  public init(
+    configPath: String? = nil,
+    configuration: GhosttySurfaceConfiguration = .init(),
+    bridge: GhosttySurfaceBridge = GhosttySurfaceBridge()
+  ) {
+    self.controller = nil
+    self.runtime = nil
+    self.configPath = configPath
     self.configuration = configuration
     self.bridge = bridge
   }
@@ -22,12 +46,16 @@ public struct GhosttyTerminalView: NSViewRepresentable {
   public func makeNSView(context: Context) -> NSView {
     GhosttyTrace.write("terminal view makeNSView start")
     do {
-      let surfaceView = try GhosttySurfaceView(
-        runtime: runtime,
-        configuration: configuration,
-        bridge: bridge
-      )
-      let view = GhosttySurfaceScrollView(surfaceView: surfaceView)
+      let view = if let controller {
+        try GhosttyTerminalContainerView(controller: controller)
+      } else {
+        try GhosttyTerminalContainerView(
+          runtime: runtime,
+          configPath: configPath,
+          configuration: configuration,
+          bridge: bridge
+        )
+      }
       GhosttyTrace.write("terminal view makeNSView success")
       return view
     } catch {
