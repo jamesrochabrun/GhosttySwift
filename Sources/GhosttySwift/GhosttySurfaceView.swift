@@ -26,6 +26,8 @@ public final class GhosttySurfaceView: NSView {
   private var contentSizeBacking: NSSize?
   private var isObservingWindowNotifications = false
   private var titleChangeTimer: Timer?
+  var markedText = NSMutableAttributedString()
+  var keyTextAccumulator: [String]?
 
   public override var acceptsFirstResponder: Bool { true }
 
@@ -265,6 +267,30 @@ public final class GhosttySurfaceView: NSView {
   private func setSurfaceSize(width: UInt32, height: UInt32) {
     guard let surfaceHandle else { return }
     ghostty_surface_set_size(surfaceHandle, width, height)
+  }
+
+  func sendText(_ text: String) {
+    guard let surfaceHandle else { return }
+    let utf8Count = text.utf8CString.count
+    guard utf8Count > 1 else { return }
+    text.withCString { pointer in
+      ghostty_surface_text(surfaceHandle, pointer, UInt(utf8Count - 1))
+    }
+  }
+
+  func syncPreedit(clearIfNeeded: Bool = true) {
+    guard let surfaceHandle else { return }
+
+    if markedText.length > 0 {
+      let string = markedText.string
+      let utf8Count = string.utf8CString.count
+      guard utf8Count > 1 else { return }
+      string.withCString { pointer in
+        ghostty_surface_preedit(surfaceHandle, pointer, UInt(utf8Count - 1))
+      }
+    } else if clearIfNeeded {
+      ghostty_surface_preedit(surfaceHandle, nil, 0)
+    }
   }
 
   private func updateDisplayID() {

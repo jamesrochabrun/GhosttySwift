@@ -52,6 +52,7 @@ Status meanings:
 | `Sources/GhosttySwift/GhosttyRuntime.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.App.swift` |
 | `Sources/GhosttySwift/GhosttySurfaceView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift`, `SurfaceScrollView.swift` |
 | `Sources/GhosttySwift/GhosttySurfaceView+Input.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift`, `NSEvent+Extension.swift` |
+| `Sources/GhosttySwift/GhosttySurfaceView+TextInput.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift` |
 | `Sources/GhosttySwift/GhosttyKeyMap.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.Input.swift`, `NSEvent+Extension.swift` |
 | `Sources/GhosttySwift/NSEvent+Ghostty.swift` | fresh-wrapper | `macos/Sources/Ghostty/NSEvent+Extension.swift` |
 | `Sources/GhosttySwift/GhosttyMouseMap.swift` | fresh-wrapper | upstream surface input handling |

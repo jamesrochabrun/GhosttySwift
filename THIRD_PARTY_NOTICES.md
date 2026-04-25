@@ -14,6 +14,7 @@ Wrapper files substantially informed by or adapted from upstream Ghostty MIT sou
 - `Sources/GhosttySwift/GhosttyRuntime.swift`
 - `Sources/GhosttySwift/GhosttySurfaceView.swift`
 - `Sources/GhosttySwift/GhosttySurfaceView+Input.swift`
+- `Sources/GhosttySwift/GhosttySurfaceView+TextInput.swift`
 - `Sources/GhosttySwift/GhosttySurfaceBridge.swift`
 - `Sources/GhosttySwift/GhosttyKeyMap.swift`
 - `Sources/GhosttySwift/NSEvent+Ghostty.swift`
