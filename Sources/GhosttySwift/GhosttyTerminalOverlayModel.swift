@@ -1,25 +1,26 @@
 import AppKit
-import Combine
+import Observation
 import SwiftUI
 
 @MainActor
-final class GhosttyTerminalOverlayModel: ObservableObject {
+@Observable
+final class GhosttyTerminalOverlayModel {
   struct ChildExitBanner: Equatable {
     let title: String
     let subtitle: String
     let isError: Bool
   }
 
-  @Published private(set) var secureInputEnabled = false
-  @Published private(set) var searchState: GhosttySurfaceSearchState?
-  @Published var searchNeedle = ""
-  @Published private(set) var cellSize: CGSize = .zero
-  @Published private(set) var childExitBanner: ChildExitBanner?
+  private(set) var secureInputEnabled = false
+  private(set) var searchState: GhosttySurfaceSearchState?
+  var searchNeedle = ""
+  private(set) var cellSize: CGSize = .zero
+  private(set) var childExitBanner: ChildExitBanner?
 
-  private let controller: GhosttyTerminalController
-  private var isSyncingSearchNeedle = false
-  private var dismissChildExitWorkItem: DispatchWorkItem?
-  private var lastChildExitInfo: GhosttySurfaceChildExitInfo?
+  @ObservationIgnored private let controller: GhosttyTerminalController
+  @ObservationIgnored private var isSyncingSearchNeedle = false
+  @ObservationIgnored private var dismissChildExitWorkItem: DispatchWorkItem?
+  @ObservationIgnored private var lastChildExitInfo: GhosttySurfaceChildExitInfo?
 
   init(controller: GhosttyTerminalController) {
     self.controller = controller

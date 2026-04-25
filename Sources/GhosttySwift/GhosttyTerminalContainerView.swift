@@ -68,7 +68,6 @@ public final class GhosttyTerminalContainerView: NSView {
       overlayModel?.sync(from: controller)
       self?.scrollView.syncFromController()
     }
-    installKeyMonitor()
     scrollView.syncFromController()
   }
 
@@ -92,6 +91,11 @@ public final class GhosttyTerminalContainerView: NSView {
     fatalError("init(coder:) is not supported")
   }
 
+  public override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    updateLocalKeyMonitor()
+  }
+
   isolated deinit {
     if let localKeyMonitor {
       NSEvent.removeMonitor(localKeyMonitor)
@@ -102,7 +106,19 @@ public final class GhosttyTerminalContainerView: NSView {
     surfaceView.claimFirstResponder()
   }
 
+  private func updateLocalKeyMonitor() {
+    if window == nil {
+      if let localKeyMonitor {
+        NSEvent.removeMonitor(localKeyMonitor)
+        self.localKeyMonitor = nil
+      }
+    } else {
+      installKeyMonitor()
+    }
+  }
+
   private func installKeyMonitor() {
+    guard localKeyMonitor == nil else { return }
     localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self else { return event }
       return handleSearchKeyEvent(event) ? nil : event

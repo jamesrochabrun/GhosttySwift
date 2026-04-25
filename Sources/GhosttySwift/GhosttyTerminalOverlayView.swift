@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct GhosttyTerminalSearchOverlayHostView: View {
-  @ObservedObject var model: GhosttyTerminalOverlayModel
+  let model: GhosttyTerminalOverlayModel
 
   var body: some View {
     Group {
@@ -17,7 +17,7 @@ struct GhosttyTerminalSearchOverlayHostView: View {
 }
 
 struct GhosttyTerminalSecureInputBadgeHostView: View {
-  @ObservedObject var model: GhosttyTerminalOverlayModel
+  let model: GhosttyTerminalOverlayModel
 
   var body: some View {
     Group {
@@ -29,7 +29,7 @@ struct GhosttyTerminalSecureInputBadgeHostView: View {
 }
 
 struct GhosttyTerminalChildExitBannerHostView: View {
-  @ObservedObject var model: GhosttyTerminalOverlayModel
+  let model: GhosttyTerminalOverlayModel
 
   var body: some View {
     Group {
@@ -44,7 +44,7 @@ struct GhosttyTerminalChildExitBannerHostView: View {
 }
 
 private struct GhosttyTerminalSearchOverlay: View {
-  @ObservedObject var model: GhosttyTerminalOverlayModel
+  let model: GhosttyTerminalOverlayModel
   let searchState: GhosttySurfaceSearchState
 
   @FocusState private var isSearchFieldFocused: Bool

@@ -135,3 +135,35 @@ func nativeScrollHostCalculatesRowFromLiveScrollPosition() {
 
   #expect(row == 20)
 }
+
+@Test
+func splitLayoutNormalizationKeepsPrimaryFirstAndRemovesDuplicates() {
+  let primary = TerminalID()
+  let helper = TerminalID()
+  let ignored = TerminalID()
+
+  let layout = TerminalSplitLayout.normalized(
+    axis: .horizontal,
+    terminalIDs: [helper, helper, ignored],
+    availableTerminalIDs: [primary, helper],
+    primaryTerminalID: primary
+  )
+
+  #expect(layout?.axis == .horizontal)
+  #expect(layout?.terminalIDs == [primary, helper])
+}
+
+@Test
+func splitLayoutNormalizationReturnsNilWithoutTwoKnownTerminals() {
+  let primary = TerminalID()
+  let helper = TerminalID()
+
+  let layout = TerminalSplitLayout.normalized(
+    axis: .vertical,
+    terminalIDs: [helper],
+    availableTerminalIDs: [primary],
+    primaryTerminalID: primary
+  )
+
+  #expect(layout == nil)
+}
