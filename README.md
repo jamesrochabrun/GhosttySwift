@@ -12,6 +12,7 @@ Current scope:
 - one SwiftUI wrapper
 - one sample app that renders a real shell prompt
 - keyboard forwarding
+- IME and dead-key composition
 - mouse forwarding
 - clipboard integration
 - one-line SwiftUI and AppKit embedding entry points

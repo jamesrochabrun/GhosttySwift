@@ -11,7 +11,7 @@ extension GhosttySurfaceView {
 
   override public func keyDown(with event: NSEvent) {
     guard let surfaceHandle else {
-      super.keyDown(with: event)
+      interpretKeyEvents([event])
       return
     }
 
@@ -46,13 +46,34 @@ extension GhosttySurfaceView {
       ) ?? event
     }
 
-    _ = keyAction(
-      event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS,
-      event: event,
-      translationEvent: translationEvent,
-      text: translationEvent.ghosttyCharacters,
-      to: surfaceHandle
-    )
+    let action = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
+    keyTextAccumulator = []
+    defer { keyTextAccumulator = nil }
+
+    let markedTextBefore = markedText.length > 0
+    interpretKeyEvents([translationEvent])
+    syncPreedit(clearIfNeeded: markedTextBefore)
+
+    if let keyTextAccumulator, !keyTextAccumulator.isEmpty {
+      for text in keyTextAccumulator {
+        _ = keyAction(
+          action,
+          event: event,
+          translationEvent: translationEvent,
+          text: text,
+          to: surfaceHandle
+        )
+      }
+    } else {
+      _ = keyAction(
+        action,
+        event: event,
+        translationEvent: translationEvent,
+        text: translationEvent.ghosttyCharacters,
+        composing: markedText.length > 0 || markedTextBefore,
+        to: surfaceHandle
+      )
+    }
   }
 
   override public func keyUp(with event: NSEvent) {
@@ -67,6 +88,10 @@ extension GhosttySurfaceView {
   override public func flagsChanged(with event: NSEvent) {
     guard let surfaceHandle else {
       super.flagsChanged(with: event)
+      return
+    }
+
+    if hasMarkedText() {
       return
     }
 
@@ -194,9 +219,11 @@ extension GhosttySurfaceView {
     event: NSEvent,
     translationEvent: NSEvent? = nil,
     text: String? = nil,
+    composing: Bool = false,
     to surface: ghostty_surface_t
   ) -> Bool {
     var keyEvent = event.ghosttyKeyEvent(action, translationMods: translationEvent?.modifierFlags)
+    keyEvent.composing = composing
 
     if let text, !text.isEmpty, let firstByte = text.utf8.first, firstByte >= 0x20 {
       return text.withCString { pointer in
