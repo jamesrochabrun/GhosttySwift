@@ -1,7 +1,7 @@
 import Foundation
 
 enum GhosttyTrace {
-  private static let fileURL = URL(fileURLWithPath: "/tmp/ghosttyswiftpermissive-sample.trace")
+  private static let fileURL = URL(fileURLWithPath: "/tmp/ghosttyswift-sample.trace")
 
   static func write(_ message: String) {
     let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"

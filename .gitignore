@@ -1,6 +1,6 @@
 .DS_Store
 .build/
 Frameworks/GhosttyKit.xcframework/
-GhosttySwiftPermissiveSampleApp.app/
+GhosttySwiftSampleApp.app/
 ThirdParty/ghostty/zig-cache/
 ThirdParty/ghostty/zig-out/

@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GHOSTTY_DIR="$ROOT/ThirdParty/ghostty"
 FRAMEWORKS_DIR="$ROOT/Frameworks"
-RESOURCES_DIR="$ROOT/Sources/GhosttySwiftPermissive/Resources"
+RESOURCES_DIR="$ROOT/Sources/GhosttySwift/Resources"
 
 if command -v zig >/dev/null 2>&1; then
   ZIG=(zig)

@@ -1,4 +1,4 @@
-prefix=/Users/jamesrochabrun/Desktop/git/GhosttySwiftPermissive/ThirdParty/ghostty/zig-out
+prefix=/Users/jamesrochabrun/Desktop/git/GhosttySwift/ThirdParty/ghostty/zig-out
 includedir=${prefix}/include
 libdir=${prefix}/lib
 

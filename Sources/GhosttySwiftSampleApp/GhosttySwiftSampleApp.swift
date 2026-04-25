@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct GhosttySwiftPermissiveSampleApp: App {
+struct GhosttySwiftSampleApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
   init() {

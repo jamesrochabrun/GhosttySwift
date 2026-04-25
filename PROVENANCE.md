@@ -1,8 +1,8 @@
 # Provenance
 
-This repository exists to provide an embeddable Swift wrapper around upstream
-[Ghostty](https://github.com/ghostty-org/ghostty) without carrying forward code
-provenance risk from earlier derivative work.
+This ledger records the approved implementation references and attribution
+boundaries for [Ghostty](https://github.com/ghostty-org/ghostty)-based code in
+GhosttySwift.
 
 ## Source Of Truth
 
@@ -24,14 +24,14 @@ When behavior is unclear, the order of reference is:
 
 ## Non-Reference Inputs
 
-The following are not approved implementation references for this repository:
+The following are not approved code-level implementation references for this repository:
 
-- the earlier local `GhosttySwift` repository
-- local `supacode`
-- diffs, snippets, or notes copied from either of those repositories
+- unpublished local experiments
+- private derivative wrappers
+- copied diffs, snippets, or notes from either of those sources
 
-Those repositories may be used only as behavioral checklists at a product level.
-They are not valid code-level references for implementation or debugging.
+Those sources may be used only as behavioral checklists at a product level.
+They are not valid implementation or debugging references.
 
 ## File Ledger
 
@@ -49,23 +49,23 @@ Status meanings:
 | `Scripts/build-ghostty.sh` | fresh-wrapper | `build.zig`, `src/build/GhosttyXCFramework.zig` |
 | `Package.swift` | fresh-wrapper | upstream xcframework build shape and `example/swift-vt-xcframework/Package.swift` |
 | `THIRD_PARTY_NOTICES.md` | fresh-wrapper | upstream Ghostty LICENSE |
-| `Sources/GhosttySwiftPermissive/GhosttyRuntime.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.App.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift`, `SurfaceScrollView.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceView+Input.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift`, `NSEvent+Extension.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttyKeyMap.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.Input.swift`, `NSEvent+Extension.swift` |
-| `Sources/GhosttySwiftPermissive/NSEvent+Ghostty.swift` | fresh-wrapper | `macos/Sources/Ghostty/NSEvent+Extension.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttyMouseMap.swift` | fresh-wrapper | upstream surface input handling |
-| `Sources/GhosttySwiftPermissive/GhosttyPasteboard.swift` | fresh-wrapper | `macos/Sources/Helpers/Extensions/NSPasteboard+Extension.swift`, `macos/Sources/Ghostty/Ghostty.App.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceBridge.swift` | fresh-wrapper | `ghostty.h`, `macos/Sources/Ghostty/Ghostty.App.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttySurfaceConfiguration.swift` | fresh-wrapper | `ghostty.h` surface config API |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalController.swift` | fresh-wrapper | Apple Observation patterns, upstream Ghostty bridge/runtime behavior |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalContainerView.swift` | fresh-wrapper | Apple AppKit container patterns, upstream Ghostty surface host shape, `SurfaceScrollView.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayModel.swift` | fresh-wrapper | upstream search/secure-input/child-exit interaction patterns |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalOverlayView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceScrollView.swift`, `ChildExitedMessageBar.swift`, `Features/Secure Input/SecureInputOverlay.swift` |
-| `Sources/GhosttySwiftPermissive/GhosttyTerminalView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
-| `Sources/GhosttySwiftPermissive/GhosttyTrace.swift` | non-product | local debug support |
-| `Sources/GhosttySwiftPermissiveSampleApp/*` | fresh-wrapper | local sample app only |
-| `Tests/GhosttySwiftPermissiveTests/*` | fresh-wrapper | local verification only |
+| `Sources/GhosttySwift/GhosttyRuntime.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.App.swift` |
+| `Sources/GhosttySwift/GhosttySurfaceView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceView_AppKit.swift`, `SurfaceScrollView.swift` |
+| `Sources/GhosttySwift/GhosttySurfaceView+Input.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift`, `NSEvent+Extension.swift` |
+| `Sources/GhosttySwift/GhosttyKeyMap.swift` | fresh-wrapper | `macos/Sources/Ghostty/Ghostty.Input.swift`, `NSEvent+Extension.swift` |
+| `Sources/GhosttySwift/NSEvent+Ghostty.swift` | fresh-wrapper | `macos/Sources/Ghostty/NSEvent+Extension.swift` |
+| `Sources/GhosttySwift/GhosttyMouseMap.swift` | fresh-wrapper | upstream surface input handling |
+| `Sources/GhosttySwift/GhosttyPasteboard.swift` | fresh-wrapper | `macos/Sources/Helpers/Extensions/NSPasteboard+Extension.swift`, `macos/Sources/Ghostty/Ghostty.App.swift` |
+| `Sources/GhosttySwift/GhosttySurfaceBridge.swift` | fresh-wrapper | `ghostty.h`, `macos/Sources/Ghostty/Ghostty.App.swift` |
+| `Sources/GhosttySwift/GhosttySurfaceConfiguration.swift` | fresh-wrapper | `ghostty.h` surface config API |
+| `Sources/GhosttySwift/GhosttyTerminalController.swift` | fresh-wrapper | Apple Observation patterns, upstream Ghostty bridge/runtime behavior |
+| `Sources/GhosttySwift/GhosttyTerminalContainerView.swift` | fresh-wrapper | Apple AppKit container patterns, upstream Ghostty surface host shape, `SurfaceScrollView.swift` |
+| `Sources/GhosttySwift/GhosttyTerminalOverlayModel.swift` | fresh-wrapper | upstream search/secure-input/child-exit interaction patterns |
+| `Sources/GhosttySwift/GhosttyTerminalOverlayView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceScrollView.swift`, `ChildExitedMessageBar.swift`, `Features/Secure Input/SecureInputOverlay.swift` |
+| `Sources/GhosttySwift/GhosttyTerminalView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
+| `Sources/GhosttySwift/GhosttyTrace.swift` | non-product | local debug support |
+| `Sources/GhosttySwiftSampleApp/*` | fresh-wrapper | local sample app only |
+| `Tests/GhosttySwiftTests/*` | fresh-wrapper | local verification only |
 
 ## Immediate Rewrite Queue
 

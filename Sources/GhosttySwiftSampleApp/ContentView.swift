@@ -1,5 +1,5 @@
 import AppKit
-import GhosttySwiftPermissive
+import GhosttySwift
 import SwiftUI
 
 struct ContentView: View {

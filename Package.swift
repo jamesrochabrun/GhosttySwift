@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-  name: "GhosttySwiftPermissive",
+  name: "GhosttySwift",
   platforms: [.macOS(.v13)],
   products: [
     .library(
-      name: "GhosttySwiftPermissive",
-      targets: ["GhosttySwiftPermissive"]
+      name: "GhosttySwift",
+      targets: ["GhosttySwift"]
     ),
     .executable(
-      name: "GhosttySwiftPermissiveSampleApp",
-      targets: ["GhosttySwiftPermissiveSampleApp"]
+      name: "GhosttySwiftSampleApp",
+      targets: ["GhosttySwiftSampleApp"]
     ),
   ],
   targets: [
@@ -20,7 +20,7 @@ let package = Package(
       path: "Frameworks/GhosttyKit.xcframework"
     ),
     .target(
-      name: "GhosttySwiftPermissive",
+      name: "GhosttySwift",
       dependencies: ["GhosttyKit"],
       resources: [
         .copy("Resources/share"),
@@ -31,12 +31,12 @@ let package = Package(
       ]
     ),
     .executableTarget(
-      name: "GhosttySwiftPermissiveSampleApp",
-      dependencies: ["GhosttySwiftPermissive"]
+      name: "GhosttySwiftSampleApp",
+      dependencies: ["GhosttySwift"]
     ),
     .testTarget(
-      name: "GhosttySwiftPermissiveTests",
-      dependencies: ["GhosttySwiftPermissive"]
+      name: "GhosttySwiftTests",
+      dependencies: ["GhosttySwift"]
     ),
   ]
 )

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="GhosttySwiftPermissiveSampleApp"
+APP_NAME="GhosttySwiftSampleApp"
 APP_DIR="$ROOT/$APP_NAME.app"
 
 swift build --package-path "$ROOT" --product "$APP_NAME"
@@ -26,13 +26,13 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>GhosttySwiftPermissiveSampleApp</string>
+  <string>GhosttySwiftSampleApp</string>
   <key>CFBundleIdentifier</key>
-  <string>org.jamesrochabrun.GhosttySwiftPermissiveSampleApp</string>
+  <string>org.jamesrochabrun.GhosttySwiftSampleApp</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>GhosttySwiftPermissiveSampleApp</string>
+  <string>GhosttySwiftSampleApp</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

@@ -1,11 +1,9 @@
-# GhosttySwiftPermissive
+# GhosttySwift
 
-Fresh Swift Package wrapper around upstream [Ghostty](https://github.com/ghostty-org/ghostty),
-implemented from permissive sources only, with upstream Ghostty as the
-implementation source of truth.
+Swift Package wrapper around upstream [Ghostty](https://github.com/ghostty-org/ghostty)
+for embedding a real macOS terminal surface in SwiftUI or AppKit apps.
 
-This repo is intentionally separate from the earlier derivative prototype. The
-current scope is the first clean milestone:
+Current scope:
 
 - package scaffold
 - upstream Ghostty build script
@@ -27,11 +25,10 @@ Not in scope yet:
 
 ## Provenance
 
-- Upstream Ghostty is the only code-level implementation source of truth for this repo.
+- Upstream Ghostty is the code-level implementation source of truth for this repo.
 - Allowed implementation references: upstream Ghostty C API, upstream Ghostty macOS
   sources, upstream Ghostty examples, Ghostling, Apple AppKit/SwiftUI docs, and
   behavior re-derived from first principles.
-- Non-reference sources: the earlier local `GhosttySwift` repo and local `supacode`.
 - The current provenance ledger and rewrite queue live in [PROVENANCE.md](PROVENANCE.md).
 
 ## Build
@@ -62,7 +59,7 @@ activates as a regular macOS app.
 ## Embed In SwiftUI
 
 ```swift
-import GhosttySwiftPermissive
+import GhosttySwift
 import SwiftUI
 
 struct ContentView: View {
@@ -83,7 +80,7 @@ If you need to share one runtime across multiple surfaces, create a
 
 ```swift
 import AppKit
-import GhosttySwiftPermissive
+import GhosttySwift
 
 let terminalView = try GhosttyTerminalContainerView(
   configuration: GhosttySurfaceConfiguration(
@@ -103,7 +100,7 @@ without reaching into the low-level bridge directly, create a
 `GhosttyTerminalController` and pass it into the view:
 
 ```swift
-import GhosttySwiftPermissive
+import GhosttySwift
 import SwiftUI
 
 struct ContentView: View {

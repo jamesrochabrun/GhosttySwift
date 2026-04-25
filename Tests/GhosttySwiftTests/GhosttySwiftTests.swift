@@ -1,6 +1,6 @@
 import Testing
 import GhosttyKit
-@testable import GhosttySwiftPermissive
+@testable import GhosttySwift
 
 @Test
 func surfaceConfigurationDefaultsAreEmpty() {

@@ -11,13 +11,13 @@ Vendored source:
 
 Wrapper files substantially informed by or adapted from upstream Ghostty MIT sources:
 
-- `Sources/GhosttySwiftPermissive/GhosttyRuntime.swift`
-- `Sources/GhosttySwiftPermissive/GhosttySurfaceView.swift`
-- `Sources/GhosttySwiftPermissive/GhosttySurfaceView+Input.swift`
-- `Sources/GhosttySwiftPermissive/GhosttySurfaceBridge.swift`
-- `Sources/GhosttySwiftPermissive/GhosttyKeyMap.swift`
-- `Sources/GhosttySwiftPermissive/NSEvent+Ghostty.swift`
-- `Sources/GhosttySwiftPermissive/GhosttyPasteboard.swift`
+- `Sources/GhosttySwift/GhosttyRuntime.swift`
+- `Sources/GhosttySwift/GhosttySurfaceView.swift`
+- `Sources/GhosttySwift/GhosttySurfaceView+Input.swift`
+- `Sources/GhosttySwift/GhosttySurfaceBridge.swift`
+- `Sources/GhosttySwift/GhosttyKeyMap.swift`
+- `Sources/GhosttySwift/NSEvent+Ghostty.swift`
+- `Sources/GhosttySwift/GhosttyPasteboard.swift`
 
 Ghostty copyright and license notice:
 
