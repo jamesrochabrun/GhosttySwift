@@ -10,6 +10,8 @@ Current scope:
 - bundled `share/ghostty` resources
 - one AppKit surface
 - one SwiftUI wrapper
+- session model with primary and auxiliary terminals
+- optional split-pane SwiftUI host
 - one sample app that renders a real shell prompt
 - keyboard forwarding
 - IME and dead-key composition
@@ -20,8 +22,7 @@ Current scope:
 
 Not in scope yet:
 
-- tabs or sessions
-- splits
+- tabs
 - persistence
 
 ## Provenance
@@ -76,6 +77,53 @@ struct ContentView: View {
 
 If you need to share one runtime across multiple surfaces, create a
 `GhosttyRuntime` yourself and pass it into `GhosttyTerminalView(runtime:...)`.
+
+## Manage A Session
+
+```swift
+import GhosttySwift
+import SwiftUI
+
+struct ContentView: View {
+  @State private var session: TerminalSession?
+
+  var body: some View {
+    Group {
+      if let session {
+        TerminalSurfaceView(session: session, showsPaneLabels: true)
+      } else {
+        ProgressView()
+      }
+    }
+    .task {
+      guard session == nil else { return }
+
+      let session = try? TerminalSession(
+        primaryConfiguration: GhosttySurfaceConfiguration(
+          workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path
+        ),
+        primaryName: "Main"
+      )
+
+      self.session = session
+    }
+  }
+
+  private func openTestPanel() {
+    try? session?.openPanel(named: "Tests", axis: .horizontal)
+  }
+}
+```
+
+`TerminalSession` keeps one primary terminal plus any number of auxiliary
+terminals alive under a shared `GhosttyRuntime`. It shows only the primary
+terminal by default. Call `openPanel(...)` or `showSplit(...)` when the host app
+wants visible split panes.
+
+The sample app uses this same model: it opens one terminal on launch, then lets
+you add split panels with `Cmd+D` or `Cmd+Shift+D`. Close an auxiliary panel
+with its pane-header close button or `Cmd+W`; the primary terminal is not closed
+by this sample command.
 
 ## Embed In AppKit
 
