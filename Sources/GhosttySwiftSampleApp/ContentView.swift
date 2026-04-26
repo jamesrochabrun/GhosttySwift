@@ -9,7 +9,7 @@ struct ContentView: View {
     let _ = SampleTrace.write("content view body")
     return Group {
       if let session {
-        TerminalSurfaceView(session: session, showsPaneLabels: session.splitLayout != nil)
+        TerminalSurfaceView(session: session)
       } else {
         ProgressView()
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -42,12 +42,28 @@ struct ContentView: View {
         .disabled(session?.splitLayout == nil)
 
         Button {
+          openTab()
+        } label: {
+          Label("New Tab", systemImage: "plus.rectangle.on.rectangle")
+        }
+        .keyboardShortcut("t", modifiers: .command)
+        .disabled(session == nil)
+
+        Button {
+          _ = session?.closeActiveTab()
+        } label: {
+          Label("Close Tab", systemImage: "xmark.rectangle")
+        }
+        .keyboardShortcut("w", modifiers: .command)
+        .disabled(session?.canCloseActiveTab != true)
+
+        Button {
           _ = session?.closeLastPanel()
         } label: {
           Label("Close Panel", systemImage: "xmark")
         }
-        .keyboardShortcut("w", modifiers: .command)
-        .disabled(session?.auxiliaryTerminals.isEmpty != false)
+        .keyboardShortcut("w", modifiers: [.command, .shift])
+        .disabled(session?.auxiliaryPanels.isEmpty != false)
       }
     }
     .task {
@@ -65,8 +81,7 @@ struct ContentView: View {
       let session = try TerminalSession(
         primaryConfiguration: GhosttySurfaceConfiguration(
           workingDirectory: homeDirectory
-        ),
-        primaryName: "Main"
+        )
       )
       self.session = session
     } catch {
@@ -79,14 +94,23 @@ struct ContentView: View {
     guard let session else { return }
 
     do {
-      let panelIndex = session.auxiliaryTerminals.count + 1
       let panel = try session.openPanel(
-        named: "Panel \(panelIndex)",
         axis: axis
       )
-      panel.focus()
+      session.focusPanel(panel.id)
     } catch {
       SampleTrace.write("failed to open panel: \(error.localizedDescription)")
+    }
+  }
+
+  @MainActor
+  private func openTab() {
+    guard let session else { return }
+
+    do {
+      try session.openTab()
+    } catch {
+      SampleTrace.write("failed to open tab: \(error.localizedDescription)")
     }
   }
 }
