@@ -64,6 +64,10 @@ public final class TerminalSession {
     activePanel.canCloseActiveTab
   }
 
+  public var canOpenPanel: Bool {
+    visiblePanels.count < 4
+  }
+
   @discardableResult
   public func openPanel(
     named name: String? = nil,
@@ -83,10 +87,16 @@ public final class TerminalSession {
     )
 
     panels.append(panel)
-    activePanelID = panel.id
 
     let visibleIDs = splitLayout?.panelIDs ?? [primaryPanelID]
-    showSplit(axis: axis, panelIDs: visibleIDs + [panel.id])
+    self.splitLayout = TerminalSplitLayout.normalized(
+      axis: axis,
+      panelIDs: visibleIDs + [panel.id],
+      availablePanelIDs: panels.map(\.id),
+      primaryPanelID: primaryPanelID
+    )
+
+    activePanelID = panel.id
     panel.activeTab?.focus()
     return panel
   }
@@ -99,9 +109,8 @@ public final class TerminalSession {
     panels.remove(at: index)
 
     if let splitLayout {
-      self.splitLayout = TerminalSplitLayout.normalized(
-        axis: splitLayout.axis,
-        panelIDs: splitLayout.panelIDs.filter { $0 != id },
+      self.splitLayout = splitLayout.removingPanel(
+        id,
         availablePanelIDs: panels.map(\.id),
         primaryPanelID: primaryPanelID
       )
@@ -246,6 +255,34 @@ public final class TerminalSession {
     return true
   }
 
+  @discardableResult
+  public func focusPanel(direction: TerminalPanelNavigationDirection) -> Bool {
+    let visibleIDs = splitLayout?.panelIDs ?? [primaryPanelID]
+    guard let targetID = Self.panelID(
+      from: activePanelID,
+      direction: direction,
+      visibleIDs: visibleIDs
+    ) else {
+      return false
+    }
+
+    return focusPanel(targetID)
+  }
+
+  @discardableResult
+  public func selectTab(direction: TerminalTabNavigationDirection) -> Bool {
+    let panel = activePanel
+    guard let targetTabID = Self.tabID(
+      from: panel.activeTabID,
+      direction: direction,
+      tabIDs: panel.tabs.map(\.id)
+    ) else {
+      return false
+    }
+
+    return selectTab(targetTabID, in: panel.id)
+  }
+
   public func panel(for id: TerminalPanelID) -> TerminalPanel? {
     panels.first { $0.id == id }
   }
@@ -269,6 +306,142 @@ public final class TerminalSession {
     in panelID: TerminalPanelID
   ) -> GhosttyTerminalContainerView? {
     tab(for: tabID, in: panelID)?.containerView
+  }
+
+  nonisolated static func panelID(
+    from activePanelID: TerminalPanelID,
+    direction: TerminalPanelNavigationDirection,
+    visibleIDs: [TerminalPanelID]
+  ) -> TerminalPanelID? {
+    guard let activeIndex = visibleIDs.firstIndex(of: activePanelID) else {
+      return nil
+    }
+
+    switch visibleIDs.count {
+    case 2:
+      return twoPanePanelID(
+        from: activeIndex,
+        direction: direction,
+        visibleIDs: visibleIDs
+      )
+    case 3:
+      return threePanePanelID(
+        from: activeIndex,
+        direction: direction,
+        visibleIDs: visibleIDs
+      )
+    case 4:
+      return fourPanePanelID(
+        from: activeIndex,
+        direction: direction,
+        visibleIDs: visibleIDs
+      )
+    default:
+      return linearPanelID(
+        from: activeIndex,
+        direction: direction,
+        visibleIDs: visibleIDs
+      )
+    }
+  }
+
+  nonisolated static func tabID(
+    from activeTabID: TerminalTabID,
+    direction: TerminalTabNavigationDirection,
+    tabIDs: [TerminalTabID]
+  ) -> TerminalTabID? {
+    guard let activeIndex = tabIDs.firstIndex(of: activeTabID) else {
+      return nil
+    }
+
+    switch direction {
+    case .previous:
+      guard activeIndex > tabIDs.startIndex else { return nil }
+      return tabIDs[tabIDs.index(before: activeIndex)]
+    case .next:
+      let nextIndex = tabIDs.index(after: activeIndex)
+      guard nextIndex < tabIDs.endIndex else { return nil }
+      return tabIDs[nextIndex]
+    }
+  }
+
+  private nonisolated static func twoPanePanelID(
+    from activeIndex: Int,
+    direction: TerminalPanelNavigationDirection,
+    visibleIDs: [TerminalPanelID]
+  ) -> TerminalPanelID? {
+    switch (activeIndex, direction) {
+    case (0, .right):
+      return visibleIDs[1]
+    case (1, .left):
+      return visibleIDs[0]
+    default:
+      return nil
+    }
+  }
+
+  private nonisolated static func threePanePanelID(
+    from activeIndex: Int,
+    direction: TerminalPanelNavigationDirection,
+    visibleIDs: [TerminalPanelID]
+  ) -> TerminalPanelID? {
+    switch (activeIndex, direction) {
+    case (0, .right):
+      return visibleIDs[1]
+    case (1, .left), (2, .left):
+      return visibleIDs[0]
+    case (1, .down):
+      return visibleIDs[2]
+    case (2, .up):
+      return visibleIDs[1]
+    default:
+      return nil
+    }
+  }
+
+  private nonisolated static func fourPanePanelID(
+    from activeIndex: Int,
+    direction: TerminalPanelNavigationDirection,
+    visibleIDs: [TerminalPanelID]
+  ) -> TerminalPanelID? {
+    switch (activeIndex, direction) {
+    case (0, .right):
+      return visibleIDs[1]
+    case (0, .down):
+      return visibleIDs[2]
+    case (1, .left):
+      return visibleIDs[0]
+    case (1, .down):
+      return visibleIDs[3]
+    case (2, .up):
+      return visibleIDs[0]
+    case (2, .right):
+      return visibleIDs[3]
+    case (3, .left):
+      return visibleIDs[2]
+    case (3, .up):
+      return visibleIDs[1]
+    default:
+      return nil
+    }
+  }
+
+  private nonisolated static func linearPanelID(
+    from activeIndex: Int,
+    direction: TerminalPanelNavigationDirection,
+    visibleIDs: [TerminalPanelID]
+  ) -> TerminalPanelID? {
+    switch direction {
+    case .left:
+      guard activeIndex > visibleIDs.startIndex else { return nil }
+      return visibleIDs[visibleIDs.index(before: activeIndex)]
+    case .right:
+      let nextIndex = visibleIDs.index(after: activeIndex)
+      guard nextIndex < visibleIDs.endIndex else { return nil }
+      return visibleIDs[nextIndex]
+    case .up, .down:
+      return nil
+    }
   }
 
   private func defaultTabConfiguration(for panel: TerminalPanel) -> GhosttySurfaceConfiguration {

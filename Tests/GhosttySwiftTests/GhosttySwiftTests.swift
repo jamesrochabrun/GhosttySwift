@@ -151,6 +151,13 @@ func splitLayoutNormalizationKeepsPrimaryFirstAndRemovesDuplicates() {
 
   #expect(layout?.axis == .horizontal)
   #expect(layout?.panelIDs == [primary, helper])
+  #expect(layout?.root == .split(
+    axis: .horizontal,
+    children: [
+      .panel(primary),
+      .panel(helper),
+    ]
+  ))
 }
 
 @Test
@@ -166,6 +173,277 @@ func splitLayoutNormalizationReturnsNilWithoutTwoKnownPanels() {
   )
 
   #expect(layout == nil)
+}
+
+@Test
+func splitDirectionDoesNotChangeTwoPaneShape() {
+  let primary = TerminalPanelID()
+  let helper = TerminalPanelID()
+
+  let layout = TerminalSplitLayout.normalized(
+    axis: .vertical,
+    panelIDs: [primary, helper],
+    availablePanelIDs: [primary, helper],
+    primaryPanelID: primary
+  )
+
+  #expect(layout?.axis == .vertical)
+  #expect(layout?.panelIDs == [primary, helper])
+  #expect(layout?.root == .split(
+    axis: .horizontal,
+    children: [
+      .panel(primary),
+      .panel(helper),
+    ]
+  ))
+}
+
+@Test
+func threePaneLayoutKeepsPrimaryFullHeightWithRightStack() {
+  let primary = TerminalPanelID()
+  let first = TerminalPanelID()
+  let second = TerminalPanelID()
+
+  let layout = TerminalSplitLayout.normalized(
+    axis: .horizontal,
+    panelIDs: [primary, first, second],
+    availablePanelIDs: [primary, first, second],
+    primaryPanelID: primary
+  )
+
+  #expect(layout?.panelIDs == [primary, first, second])
+  #expect(layout?.root == .split(
+    axis: .horizontal,
+    children: [
+      .panel(primary),
+      .split(
+        axis: .vertical,
+        children: [
+          .panel(first),
+          .panel(second),
+        ]
+      ),
+    ]
+  ))
+}
+
+@Test
+func fourPaneLayoutUsesTwoByTwoGrid() {
+  let primary = TerminalPanelID()
+  let first = TerminalPanelID()
+  let second = TerminalPanelID()
+  let third = TerminalPanelID()
+
+  let layout = TerminalSplitLayout.normalized(
+    axis: .horizontal,
+    panelIDs: [primary, first, second, third],
+    availablePanelIDs: [primary, first, second, third],
+    primaryPanelID: primary
+  )
+
+  #expect(layout?.panelIDs == [primary, first, second, third])
+  #expect(layout?.root == .split(
+    axis: .vertical,
+    children: [
+      .split(
+        axis: .horizontal,
+        children: [
+          .panel(primary),
+          .panel(first),
+        ]
+      ),
+      .split(
+        axis: .horizontal,
+        children: [
+          .panel(second),
+          .panel(third),
+        ]
+      ),
+    ]
+  ))
+}
+
+@Test
+func removingPanelRebuildsCanonicalLayoutForRemainingPaneCount() throws {
+  let primary = TerminalPanelID()
+  let first = TerminalPanelID()
+  let second = TerminalPanelID()
+  let third = TerminalPanelID()
+
+  let layout = try #require(TerminalSplitLayout.normalized(
+    axis: .horizontal,
+    panelIDs: [primary, first, second, third],
+    availablePanelIDs: [primary, first, second, third],
+    primaryPanelID: primary
+  ))
+
+  let updatedLayout = try #require(layout.removingPanel(
+    third,
+    availablePanelIDs: [primary, first, second],
+    primaryPanelID: primary
+  ))
+
+  #expect(updatedLayout.panelIDs == [primary, first, second])
+  #expect(updatedLayout.root == .split(
+    axis: .horizontal,
+    children: [
+      .panel(primary),
+      .split(
+        axis: .vertical,
+        children: [
+          .panel(first),
+          .panel(second),
+        ]
+      ),
+    ]
+  ))
+}
+
+@Test
+func removingLastAuxiliaryClearsSplitLayout() throws {
+  let primary = TerminalPanelID()
+  let helper = TerminalPanelID()
+
+  let layout = try #require(TerminalSplitLayout.normalized(
+    axis: .horizontal,
+    panelIDs: [primary, helper],
+    availablePanelIDs: [primary, helper],
+    primaryPanelID: primary
+  ))
+
+  let updatedLayout = layout.removingPanel(
+    helper,
+    availablePanelIDs: [primary],
+    primaryPanelID: primary
+  )
+
+  #expect(updatedLayout == nil)
+}
+
+@Test
+func twoPaneNavigationMovesLeftAndRightWithoutWrapping() {
+  let primary = TerminalPanelID()
+  let helper = TerminalPanelID()
+  let visibleIDs = [primary, helper]
+
+  #expect(TerminalSession.panelID(
+    from: primary,
+    direction: .right,
+    visibleIDs: visibleIDs
+  ) == helper)
+  #expect(TerminalSession.panelID(
+    from: helper,
+    direction: .left,
+    visibleIDs: visibleIDs
+  ) == primary)
+  #expect(TerminalSession.panelID(
+    from: primary,
+    direction: .left,
+    visibleIDs: visibleIDs
+  ) == nil)
+  #expect(TerminalSession.panelID(
+    from: helper,
+    direction: .right,
+    visibleIDs: visibleIDs
+  ) == nil)
+}
+
+@Test
+func threePaneNavigationUsesLeftPanelAndRightStack() {
+  let primary = TerminalPanelID()
+  let topRight = TerminalPanelID()
+  let bottomRight = TerminalPanelID()
+  let visibleIDs = [primary, topRight, bottomRight]
+
+  #expect(TerminalSession.panelID(
+    from: primary,
+    direction: .right,
+    visibleIDs: visibleIDs
+  ) == topRight)
+  #expect(TerminalSession.panelID(
+    from: topRight,
+    direction: .down,
+    visibleIDs: visibleIDs
+  ) == bottomRight)
+  #expect(TerminalSession.panelID(
+    from: bottomRight,
+    direction: .up,
+    visibleIDs: visibleIDs
+  ) == topRight)
+  #expect(TerminalSession.panelID(
+    from: bottomRight,
+    direction: .left,
+    visibleIDs: visibleIDs
+  ) == primary)
+  #expect(TerminalSession.panelID(
+    from: topRight,
+    direction: .right,
+    visibleIDs: visibleIDs
+  ) == nil)
+}
+
+@Test
+func fourPaneNavigationUsesGridNeighbors() {
+  let topLeft = TerminalPanelID()
+  let topRight = TerminalPanelID()
+  let bottomLeft = TerminalPanelID()
+  let bottomRight = TerminalPanelID()
+  let visibleIDs = [topLeft, topRight, bottomLeft, bottomRight]
+
+  #expect(TerminalSession.panelID(
+    from: topLeft,
+    direction: .right,
+    visibleIDs: visibleIDs
+  ) == topRight)
+  #expect(TerminalSession.panelID(
+    from: topLeft,
+    direction: .down,
+    visibleIDs: visibleIDs
+  ) == bottomLeft)
+  #expect(TerminalSession.panelID(
+    from: bottomRight,
+    direction: .left,
+    visibleIDs: visibleIDs
+  ) == bottomLeft)
+  #expect(TerminalSession.panelID(
+    from: bottomRight,
+    direction: .up,
+    visibleIDs: visibleIDs
+  ) == topRight)
+  #expect(TerminalSession.panelID(
+    from: topRight,
+    direction: .right,
+    visibleIDs: visibleIDs
+  ) == nil)
+}
+
+@Test
+func tabNavigationMovesBetweenAdjacentTabsWithoutWrapping() {
+  let first = TerminalTabID()
+  let second = TerminalTabID()
+  let third = TerminalTabID()
+  let tabIDs = [first, second, third]
+
+  #expect(TerminalSession.tabID(
+    from: second,
+    direction: .previous,
+    tabIDs: tabIDs
+  ) == first)
+  #expect(TerminalSession.tabID(
+    from: second,
+    direction: .next,
+    tabIDs: tabIDs
+  ) == third)
+  #expect(TerminalSession.tabID(
+    from: first,
+    direction: .previous,
+    tabIDs: tabIDs
+  ) == nil)
+  #expect(TerminalSession.tabID(
+    from: third,
+    direction: .next,
+    tabIDs: tabIDs
+  ) == nil)
 }
 
 @Test

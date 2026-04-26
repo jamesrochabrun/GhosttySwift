@@ -110,7 +110,7 @@ struct ContentView: View {
   }
 
   private func openTestPanel() {
-    try? session?.openPanel(named: "Tests", axis: .horizontal)
+    try? session?.openPanel(named: "Tests")
   }
 
   private func openTestTab() {
@@ -126,10 +126,18 @@ renders only its active tab. It shows only the primary panel by default. Call
 visible split panes or pane-local tab stacks.
 
 The sample app uses this same model: it opens one terminal on launch, then lets
-you add split panels with `Cmd+D` or `Cmd+Shift+D`, open a tab with `Cmd+T`,
-close the active tab with `Cmd+W`, and close an auxiliary panel with
-`Cmd+Shift+W`. The primary panel's last tab is not closed by these sample
-commands.
+you add up to four visible panes with `Cmd+D`. Pane layout is count-based: two
+panes are side-by-side, three panes keep the first pane full-height on the left
+with the other two stacked on the right, and four panes form a 2x2 grid. Use
+`Cmd+Arrow` to move between panes, `Cmd+T` to open a tab,
+`Cmd+Shift+Left/Right` to move between tabs in the active pane, and
+`Cmd+Shift+W` to close an auxiliary panel. The primary panel's last tab is not
+closed by these sample commands.
+
+The sample app currently claims `Cmd+W` as an enabled no-op so macOS does not
+fall back to the standard Close Window command. If an embedding host wants
+`Cmd+W` to close a terminal tab, it should register its own command and leave it
+enabled even when the terminal action is a no-op.
 
 ## Embed In AppKit
 
