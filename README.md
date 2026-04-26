@@ -22,7 +22,6 @@ Current scope:
 
 Not in scope yet:
 
-- tabs
 - persistence
 
 ## Provenance
@@ -77,6 +76,42 @@ struct ContentView: View {
 
 If you need to share one runtime across multiple surfaces, create a
 `GhosttyRuntime` yourself and pass it into `GhosttyTerminalView(runtime:...)`.
+
+## Ghostty Configuration
+
+GhosttySwift can load a regular Ghostty config file by passing `configPath`
+when creating the runtime-backed entry point:
+
+```swift
+let terminal = GhosttyTerminalView(
+  configPath: "/Users/you/.config/ghostty/config",
+  configuration: GhosttySurfaceConfiguration(
+    workingDirectory: projectPath
+  )
+)
+```
+
+The same `configPath` parameter is available on `GhosttyTerminalController`,
+`TerminalSession`, and `TerminalManager`:
+
+```swift
+let session = try TerminalSession(
+  configPath: "/Users/you/.config/ghostty/config",
+  primaryConfiguration: .init(workingDirectory: projectPath)
+)
+```
+
+`configPath` is runtime-scoped. It controls Ghostty config values such as theme,
+font family, palette, cursor settings, and Ghostty keybinds for every surface
+created from that runtime. `GhosttySurfaceConfiguration` remains the
+per-surface override layer for host concerns such as working directory, command,
+initial input, and explicit font size.
+
+If `configPath` is `nil`, GhosttySwift asks Ghostty to load its default config
+files. GhosttySwift also lets Ghostty process recursive config includes before
+finalizing the runtime config. Passing config text directly as an in-memory
+string is not supported by the public wrapper today; write it to a file and pass
+that file path.
 
 ## Manage A Session
 
