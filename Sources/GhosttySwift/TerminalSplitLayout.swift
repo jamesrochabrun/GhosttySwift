@@ -1,33 +1,33 @@
 public struct TerminalSplitLayout: Codable, Equatable, Sendable {
   public var axis: TerminalSplitAxis
-  public var terminalIDs: [TerminalID]
+  public var panelIDs: [TerminalPanelID]
 
-  public init(axis: TerminalSplitAxis, terminalIDs: [TerminalID]) {
+  public init(axis: TerminalSplitAxis, panelIDs: [TerminalPanelID]) {
     self.axis = axis
-    self.terminalIDs = terminalIDs
+    self.panelIDs = panelIDs
   }
 
   public static func normalized(
     axis: TerminalSplitAxis,
-    terminalIDs: [TerminalID],
-    availableTerminalIDs: [TerminalID],
-    primaryTerminalID: TerminalID
+    panelIDs: [TerminalPanelID],
+    availablePanelIDs: [TerminalPanelID],
+    primaryPanelID: TerminalPanelID
   ) -> TerminalSplitLayout? {
-    let availableIDs = Set(availableTerminalIDs)
-    var normalizedIDs: [TerminalID] = []
+    let availableIDs = Set(availablePanelIDs)
+    var normalizedIDs: [TerminalPanelID] = []
 
-    for terminalID in terminalIDs where availableIDs.contains(terminalID) {
-      if !normalizedIDs.contains(terminalID) {
-        normalizedIDs.append(terminalID)
+    for panelID in panelIDs where availableIDs.contains(panelID) {
+      if !normalizedIDs.contains(panelID) {
+        normalizedIDs.append(panelID)
       }
     }
 
-    normalizedIDs.removeAll { $0 == primaryTerminalID }
-    if availableIDs.contains(primaryTerminalID) {
-      normalizedIDs.insert(primaryTerminalID, at: 0)
+    normalizedIDs.removeAll { $0 == primaryPanelID }
+    if availableIDs.contains(primaryPanelID) {
+      normalizedIDs.insert(primaryPanelID, at: 0)
     }
 
     guard normalizedIDs.count > 1 else { return nil }
-    return TerminalSplitLayout(axis: axis, terminalIDs: normalizedIDs)
+    return TerminalSplitLayout(axis: axis, panelIDs: normalizedIDs)
   }
 }

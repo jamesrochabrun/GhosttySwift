@@ -4,8 +4,9 @@ import Observation
 @Observable
 public final class TerminalSession {
   public let runtime: GhosttyRuntime
-  public private(set) var terminals: [TerminalSessionTerminal]
-  public private(set) var primaryTerminalID: TerminalID
+  public private(set) var panels: [TerminalPanel]
+  public private(set) var primaryPanelID: TerminalPanelID
+  public private(set) var activePanelID: TerminalPanelID
   public private(set) var splitLayout: TerminalSplitLayout?
 
   public init(
@@ -16,52 +17,51 @@ public final class TerminalSession {
   ) throws {
     self.runtime = try runtime ?? GhosttyRuntime(configPath: configPath)
 
-    let primaryTerminal = try TerminalSession.makeTerminal(
+    let primaryTab = try TerminalSession.makeTab(
       runtime: self.runtime,
-      role: .primary,
       name: primaryName,
       configuration: primaryConfiguration
     )
+    let primaryPanel = TerminalPanel(
+      role: .primary,
+      name: primaryName,
+      tabs: [primaryTab],
+      activeTabID: primaryTab.id
+    )
 
-    self.terminals = [primaryTerminal]
-    self.primaryTerminalID = primaryTerminal.id
+    self.panels = [primaryPanel]
+    self.primaryPanelID = primaryPanel.id
+    self.activePanelID = primaryPanel.id
     self.splitLayout = nil
   }
 
-  public var primaryTerminal: TerminalSessionTerminal {
-    terminal(for: primaryTerminalID)!
+  public var primaryPanel: TerminalPanel {
+    panel(for: primaryPanelID)!
   }
 
-  public var auxiliaryTerminals: [TerminalSessionTerminal] {
-    terminals.filter { $0.role == .auxiliary }
+  public var activePanel: TerminalPanel {
+    panel(for: activePanelID) ?? primaryPanel
   }
 
-  public var visibleTerminals: [TerminalSessionTerminal] {
-    let visibleIDs = splitLayout?.terminalIDs ?? [primaryTerminalID]
-    return visibleIDs.compactMap { terminal(for: $0) }
+  public var auxiliaryPanels: [TerminalPanel] {
+    panels.filter { $0.role == .auxiliary }
+  }
+
+  public var visiblePanels: [TerminalPanel] {
+    let visibleIDs = splitLayout?.panelIDs ?? [primaryPanelID]
+    return visibleIDs.compactMap { panel(for: $0) }
+  }
+
+  public var activeTab: TerminalTab? {
+    activePanel.activeTab
   }
 
   public var defaultPanelConfiguration: GhosttySurfaceConfiguration {
-    let primaryController = primaryTerminal.controller
-    return GhosttySurfaceConfiguration(
-      workingDirectory: primaryController.workingDirectory ?? primaryController.configuration.workingDirectory,
-      fontSize: primaryController.configuration.fontSize
-    )
+    defaultTabConfiguration(for: primaryPanel)
   }
 
-  @discardableResult
-  public func addAuxiliaryTerminal(
-    named name: String? = nil,
-    configuration: GhosttySurfaceConfiguration = .init()
-  ) throws -> TerminalSessionTerminal {
-    let terminal = try TerminalSession.makeTerminal(
-      runtime: runtime,
-      role: .auxiliary,
-      name: name,
-      configuration: configuration
-    )
-    terminals.append(terminal)
-    return terminal
+  public var canCloseActiveTab: Bool {
+    activePanel.canCloseActiveTab
   }
 
   @discardableResult
@@ -69,44 +69,56 @@ public final class TerminalSession {
     named name: String? = nil,
     configuration: GhosttySurfaceConfiguration? = nil,
     axis: TerminalSplitAxis = .horizontal
-  ) throws -> TerminalSessionTerminal {
-    let terminal = try addAuxiliaryTerminal(
-      named: name,
+  ) throws -> TerminalPanel {
+    let tab = try TerminalSession.makeTab(
+      runtime: runtime,
+      name: name,
       configuration: configuration ?? defaultPanelConfiguration
     )
-    let visibleIDs = splitLayout?.terminalIDs ?? [primaryTerminalID]
-    showSplit(axis: axis, terminalIDs: visibleIDs + [terminal.id])
-    return terminal
+    let panel = TerminalPanel(
+      role: .auxiliary,
+      name: name,
+      tabs: [tab],
+      activeTabID: tab.id
+    )
+
+    panels.append(panel)
+    activePanelID = panel.id
+
+    let visibleIDs = splitLayout?.panelIDs ?? [primaryPanelID]
+    showSplit(axis: axis, panelIDs: visibleIDs + [panel.id])
+    panel.activeTab?.focus()
+    return panel
   }
 
   @discardableResult
-  public func removeTerminal(_ id: TerminalID) -> Bool {
-    guard id != primaryTerminalID else { return false }
-    guard let index = terminals.firstIndex(where: { $0.id == id }) else { return false }
+  public func closePanel(_ id: TerminalPanelID) -> Bool {
+    guard id != primaryPanelID else { return false }
+    guard let index = panels.firstIndex(where: { $0.id == id }) else { return false }
 
-    terminals.remove(at: index)
+    panels.remove(at: index)
 
     if let splitLayout {
       self.splitLayout = TerminalSplitLayout.normalized(
         axis: splitLayout.axis,
-        terminalIDs: splitLayout.terminalIDs.filter { $0 != id },
-        availableTerminalIDs: terminals.map(\.id),
-        primaryTerminalID: primaryTerminalID
+        panelIDs: splitLayout.panelIDs.filter { $0 != id },
+        availablePanelIDs: panels.map(\.id),
+        primaryPanelID: primaryPanelID
       )
+    }
+
+    if activePanelID == id {
+      activePanelID = primaryPanelID
+      primaryPanel.activeTab?.focus()
     }
 
     return true
   }
 
   @discardableResult
-  public func closePanel(_ id: TerminalID) -> Bool {
-    removeTerminal(id)
-  }
-
-  @discardableResult
   public func closeLastPanel() -> Bool {
-    let visibleAuxiliaryID = visibleTerminals.reversed().first { $0.id != primaryTerminalID }?.id
-    let fallbackAuxiliaryID = auxiliaryTerminals.last?.id
+    let visibleAuxiliaryID = visiblePanels.reversed().first { $0.id != primaryPanelID }?.id
+    let fallbackAuxiliaryID = auxiliaryPanels.last?.id
 
     guard let panelID = visibleAuxiliaryID ?? fallbackAuxiliaryID else {
       return false
@@ -115,16 +127,86 @@ public final class TerminalSession {
     return closePanel(panelID)
   }
 
-  public func renameTerminal(_ id: TerminalID, to name: String?) {
-    terminal(for: id)?.name = name
+  @discardableResult
+  public func openTab(
+    in panelID: TerminalPanelID? = nil,
+    named name: String? = nil,
+    configuration: GhosttySurfaceConfiguration? = nil
+  ) throws -> TerminalTab {
+    let targetPanelID = panelID ?? activePanelID
+    guard let panel = panel(for: targetPanelID) else {
+      throw TerminalSessionError.panelNotFound
+    }
+
+    let tab = try TerminalSession.makeTab(
+      runtime: runtime,
+      name: name,
+      configuration: configuration ?? defaultTabConfiguration(for: panel)
+    )
+    panel.appendTab(tab)
+    activePanelID = panel.id
+    tab.focus()
+    return tab
+  }
+
+  @discardableResult
+  public func closeTab(
+    _ tabID: TerminalTabID,
+    in panelID: TerminalPanelID
+  ) -> Bool {
+    guard let panel = panel(for: panelID) else { return false }
+
+    if panel.tabs.count == 1 {
+      return closePanel(panelID)
+    }
+
+    let didClose = panel.removeTab(tabID)
+    if didClose {
+      activePanelID = panelID
+      panel.activeTab?.focus()
+    }
+    return didClose
+  }
+
+  @discardableResult
+  public func closeActiveTab() -> Bool {
+    guard let tabID = activePanel.activeTab?.id else { return false }
+    return closeTab(tabID, in: activePanel.id)
+  }
+
+  @discardableResult
+  public func selectTab(
+    _ tabID: TerminalTabID,
+    in panelID: TerminalPanelID
+  ) -> Bool {
+    guard let panel = panel(for: panelID), panel.selectTab(tabID) else {
+      return false
+    }
+
+    activePanelID = panel.id
+    panel.activeTab?.focus()
+    return true
+  }
+
+  public func renamePanel(_ id: TerminalPanelID, to name: String?) {
+    panel(for: id)?.name = name
+  }
+
+  public func renameTab(
+    _ tabID: TerminalTabID,
+    in panelID: TerminalPanelID,
+    to name: String?
+  ) {
+    panel(for: panelID)?.tab(for: tabID)?.name = name
   }
 
   public func showPrimaryOnly() {
     splitLayout = nil
+    activePanelID = primaryPanelID
   }
 
   public func showPrimaryAndFirstAuxiliary(axis: TerminalSplitAxis = .horizontal) {
-    guard let firstAuxiliary = auxiliaryTerminals.first else {
+    guard let firstAuxiliary = auxiliaryPanels.first else {
       showPrimaryOnly()
       return
     }
@@ -133,64 +215,91 @@ public final class TerminalSession {
   }
 
   public func showPrimaryAndAuxiliary(
-    _ auxiliaryID: TerminalID,
+    _ auxiliaryID: TerminalPanelID,
     axis: TerminalSplitAxis = .horizontal
   ) {
-    showSplit(axis: axis, terminalIDs: [primaryTerminalID, auxiliaryID])
+    showSplit(axis: axis, panelIDs: [primaryPanelID, auxiliaryID])
   }
 
   public func showPrimaryAndAuxiliaries(axis: TerminalSplitAxis = .horizontal) {
-    let terminalIDs = [primaryTerminalID] + auxiliaryTerminals.map(\.id)
-    showSplit(axis: axis, terminalIDs: terminalIDs)
+    let panelIDs = [primaryPanelID] + auxiliaryPanels.map(\.id)
+    showSplit(axis: axis, panelIDs: panelIDs)
   }
 
   public func showSplit(
     axis: TerminalSplitAxis = .horizontal,
-    terminalIDs: [TerminalID]
+    panelIDs: [TerminalPanelID]
   ) {
     splitLayout = TerminalSplitLayout.normalized(
       axis: axis,
-      terminalIDs: terminalIDs,
-      availableTerminalIDs: terminals.map(\.id),
-      primaryTerminalID: primaryTerminalID
+      panelIDs: panelIDs,
+      availablePanelIDs: panels.map(\.id),
+      primaryPanelID: primaryPanelID
     )
   }
 
   @discardableResult
-  public func focusTerminal(_ id: TerminalID) -> Bool {
-    guard let terminal = terminal(for: id) else { return false }
-    terminal.focus()
+  public func focusPanel(_ id: TerminalPanelID) -> Bool {
+    guard let panel = panel(for: id) else { return false }
+    activePanelID = panel.id
+    panel.activeTab?.focus()
     return true
   }
 
-  public func terminal(for id: TerminalID) -> TerminalSessionTerminal? {
-    terminals.first { $0.id == id }
+  public func panel(for id: TerminalPanelID) -> TerminalPanel? {
+    panels.first { $0.id == id }
   }
 
-  public func controller(for id: TerminalID) -> GhosttyTerminalController? {
-    terminal(for: id)?.controller
+  public func tab(
+    for tabID: TerminalTabID,
+    in panelID: TerminalPanelID
+  ) -> TerminalTab? {
+    panel(for: panelID)?.tab(for: tabID)
   }
 
-  public func containerView(for id: TerminalID) -> GhosttyTerminalContainerView? {
-    terminal(for: id)?.containerView
+  public func controller(
+    for tabID: TerminalTabID,
+    in panelID: TerminalPanelID
+  ) -> GhosttyTerminalController? {
+    tab(for: tabID, in: panelID)?.controller
   }
 
-  private static func makeTerminal(
+  public func containerView(
+    for tabID: TerminalTabID,
+    in panelID: TerminalPanelID
+  ) -> GhosttyTerminalContainerView? {
+    tab(for: tabID, in: panelID)?.containerView
+  }
+
+  private func defaultTabConfiguration(for panel: TerminalPanel) -> GhosttySurfaceConfiguration {
+    guard let tab = panel.activeTab else {
+      return .init()
+    }
+
+    return GhosttySurfaceConfiguration(
+      workingDirectory: tab.controller.workingDirectory ?? tab.controller.configuration.workingDirectory,
+      fontSize: tab.controller.configuration.fontSize
+    )
+  }
+
+  private static func makeTab(
     runtime: GhosttyRuntime,
-    role: TerminalRole,
     name: String?,
     configuration: GhosttySurfaceConfiguration
-  ) throws -> TerminalSessionTerminal {
+  ) throws -> TerminalTab {
     let controller = try GhosttyTerminalController(
       runtime: runtime,
       configuration: configuration
     )
     let containerView = try GhosttyTerminalContainerView(controller: controller)
-    return TerminalSessionTerminal(
-      role: role,
+    return TerminalTab(
       name: name,
       controller: controller,
       containerView: containerView
     )
   }
+}
+
+public enum TerminalSessionError: Error {
+  case panelNotFound
 }

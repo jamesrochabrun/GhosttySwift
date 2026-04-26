@@ -64,15 +64,20 @@ Status meanings:
 | `Sources/GhosttySwift/GhosttyTerminalOverlayModel.swift` | fresh-wrapper | upstream search/secure-input/child-exit interaction patterns |
 | `Sources/GhosttySwift/GhosttyTerminalOverlayView.swift` | fresh-wrapper | `macos/Sources/Ghostty/Surface View/SurfaceView.swift`, `SurfaceScrollView.swift`, `ChildExitedMessageBar.swift`, `Features/Secure Input/SecureInputOverlay.swift` |
 | `Sources/GhosttySwift/GhosttyTerminalView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
-| `Sources/GhosttySwift/TerminalID.swift` | fresh-wrapper | public session model |
+| `Sources/GhosttySwift/TerminalPanelID.swift` | fresh-wrapper | public session model |
+| `Sources/GhosttySwift/TerminalTabID.swift` | fresh-wrapper | public session model |
 | `Sources/GhosttySwift/TerminalSessionID.swift` | fresh-wrapper | public session model |
-| `Sources/GhosttySwift/TerminalRole.swift` | fresh-wrapper | public session model |
+| `Sources/GhosttySwift/TerminalPanelRole.swift` | fresh-wrapper | public session model |
 | `Sources/GhosttySwift/TerminalSplitAxis.swift` | fresh-wrapper | public session model |
 | `Sources/GhosttySwift/TerminalSplitLayout.swift` | fresh-wrapper | public split-layout model |
-| `Sources/GhosttySwift/TerminalSessionTerminal.swift` | fresh-wrapper | Apple Observation patterns, current wrapper session orchestration |
+| `Sources/GhosttySwift/TerminalPanel.swift` | fresh-wrapper | Apple Observation patterns, current wrapper session orchestration |
+| `Sources/GhosttySwift/TerminalTab.swift` | fresh-wrapper | Apple Observation patterns, current wrapper session orchestration |
 | `Sources/GhosttySwift/TerminalSession.swift` | fresh-wrapper | Apple Observation patterns, current wrapper runtime/controller orchestration |
 | `Sources/GhosttySwift/TerminalManager.swift` | fresh-wrapper | Apple Observation patterns, current wrapper session orchestration |
 | `Sources/GhosttySwift/TerminalHostedContainerView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
+| `Sources/GhosttySwift/TerminalTabShape.swift` | fresh-wrapper | Apple SwiftUI tab composition |
+| `Sources/GhosttySwift/TerminalTabStripView.swift` | fresh-wrapper | Apple SwiftUI tab composition |
+| `Sources/GhosttySwift/TerminalTabStripItemView.swift` | fresh-wrapper | Apple SwiftUI tab composition |
 | `Sources/GhosttySwift/TerminalSurfacePaneView.swift` | fresh-wrapper | Apple SwiftUI split-pane composition |
 | `Sources/GhosttySwift/TerminalSurfaceView.swift` | fresh-wrapper | Apple SwiftUI split-pane composition |
 | `Sources/GhosttySwift/GhosttyTrace.swift` | non-product | local debug support |

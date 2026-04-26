@@ -5,10 +5,10 @@ import SwiftUI
 struct TerminalHostedContainerView: NSViewRepresentable {
   typealias NSViewType = GhosttyTerminalContainerView
 
-  let terminal: TerminalSessionTerminal
+  let tab: TerminalTab
 
   func makeNSView(context: Context) -> GhosttyTerminalContainerView {
-    terminal.containerView
+    tab.containerView
   }
 
   func updateNSView(_ nsView: GhosttyTerminalContainerView, context: Context) {}

@@ -138,32 +138,93 @@ func nativeScrollHostCalculatesRowFromLiveScrollPosition() {
 
 @Test
 func splitLayoutNormalizationKeepsPrimaryFirstAndRemovesDuplicates() {
-  let primary = TerminalID()
-  let helper = TerminalID()
-  let ignored = TerminalID()
+  let primary = TerminalPanelID()
+  let helper = TerminalPanelID()
+  let ignored = TerminalPanelID()
 
   let layout = TerminalSplitLayout.normalized(
     axis: .horizontal,
-    terminalIDs: [helper, helper, ignored],
-    availableTerminalIDs: [primary, helper],
-    primaryTerminalID: primary
+    panelIDs: [helper, helper, ignored],
+    availablePanelIDs: [primary, helper],
+    primaryPanelID: primary
   )
 
   #expect(layout?.axis == .horizontal)
-  #expect(layout?.terminalIDs == [primary, helper])
+  #expect(layout?.panelIDs == [primary, helper])
 }
 
 @Test
-func splitLayoutNormalizationReturnsNilWithoutTwoKnownTerminals() {
-  let primary = TerminalID()
-  let helper = TerminalID()
+func splitLayoutNormalizationReturnsNilWithoutTwoKnownPanels() {
+  let primary = TerminalPanelID()
+  let helper = TerminalPanelID()
 
   let layout = TerminalSplitLayout.normalized(
     axis: .vertical,
-    terminalIDs: [helper],
-    availableTerminalIDs: [primary],
-    primaryTerminalID: primary
+    panelIDs: [helper],
+    availablePanelIDs: [primary],
+    primaryPanelID: primary
   )
 
   #expect(layout == nil)
+}
+
+@Test
+func tabClosePolicyProtectsPrimaryPanelLastTab() {
+  #expect(!TerminalPanel.canCloseTab(panelRole: .primary, tabCount: 1))
+  #expect(TerminalPanel.canCloseTab(panelRole: .primary, tabCount: 2))
+  #expect(TerminalPanel.canCloseTab(panelRole: .auxiliary, tabCount: 1))
+}
+
+@Test
+func activeTabSelectionAfterClosingActiveTabChoosesNearestTab() {
+  let first = TerminalTabID()
+  let second = TerminalTabID()
+  let third = TerminalTabID()
+
+  #expect(TerminalPanel.activeTabIDAfterClosing(
+    second,
+    tabIDs: [first, second, third],
+    activeTabID: second
+  ) == third)
+
+  #expect(TerminalPanel.activeTabIDAfterClosing(
+    third,
+    tabIDs: [first, second, third],
+    activeTabID: third
+  ) == second)
+}
+
+@Test
+func activeTabSelectionPreservesActiveTabWhenClosingInactiveTab() {
+  let first = TerminalTabID()
+  let second = TerminalTabID()
+  let third = TerminalTabID()
+
+  #expect(TerminalPanel.activeTabIDAfterClosing(
+    first,
+    tabIDs: [first, second, third],
+    activeTabID: third
+  ) == third)
+}
+
+@MainActor
+@Test
+func tabDisplayNameUsesExplicitNameThenWorkingDirectoryThenFallbackNumber() {
+  #expect(TerminalTab.displayName(
+    name: "Build",
+    workingDirectory: "/Users/jamesrochabrun/Desktop/git/GhosttySwift",
+    index: 1
+  ) == "Build")
+
+  #expect(TerminalTab.displayName(
+    name: nil,
+    workingDirectory: "/Users/jamesrochabrun/Desktop/git/GhosttySwift",
+    index: 1
+  ) == "GhosttySwift")
+
+  #expect(TerminalTab.displayName(
+    name: nil,
+    workingDirectory: nil,
+    index: 2
+  ) == "Tab 3")
 }

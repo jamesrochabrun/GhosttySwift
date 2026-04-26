@@ -11,7 +11,7 @@ Current scope:
 - one AppKit surface
 - one SwiftUI wrapper
 - session model with primary and auxiliary terminals
-- optional split-pane SwiftUI host
+- optional split-pane and pane-local tab SwiftUI host
 - one sample app that renders a real shell prompt
 - keyboard forwarding
 - IME and dead-key composition
@@ -112,18 +112,24 @@ struct ContentView: View {
   private func openTestPanel() {
     try? session?.openPanel(named: "Tests", axis: .horizontal)
   }
+
+  private func openTestTab() {
+    try? session?.openTab(named: "Logs")
+  }
 }
 ```
 
-`TerminalSession` keeps one primary terminal plus any number of auxiliary
-terminals alive under a shared `GhosttyRuntime`. It shows only the primary
-terminal by default. Call `openPanel(...)` or `showSplit(...)` when the host app
-wants visible split panes.
+`TerminalSession` keeps one primary panel plus any number of auxiliary panels
+alive under a shared `GhosttyRuntime`. Each panel owns one or more tabs and
+renders only its active tab. It shows only the primary panel by default. Call
+`openPanel(...)`, `openTab(...)`, or `showSplit(...)` when the host app wants
+visible split panes or pane-local tab stacks.
 
 The sample app uses this same model: it opens one terminal on launch, then lets
-you add split panels with `Cmd+D` or `Cmd+Shift+D`. Close an auxiliary panel
-with its pane-header close button or `Cmd+W`; the primary terminal is not closed
-by this sample command.
+you add split panels with `Cmd+D` or `Cmd+Shift+D`, open a tab with `Cmd+T`,
+close the active tab with `Cmd+W`, and close an auxiliary panel with
+`Cmd+Shift+W`. The primary panel's last tab is not closed by these sample
+commands.
 
 ## Embed In AppKit
 
