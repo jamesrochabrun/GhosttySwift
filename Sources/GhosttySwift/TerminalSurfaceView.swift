@@ -24,26 +24,77 @@ public struct TerminalSurfaceView: View {
 
   public var body: some View {
     if let splitLayout = session.splitLayout, session.visiblePanels.count > 1 {
-      switch splitLayout.axis {
-      case .horizontal:
-        HSplitView {
-          ForEach(session.visiblePanels) { panel in
-            paneView(for: panel)
-          }
-        }
-      case .vertical:
-        VSplitView {
-          ForEach(session.visiblePanels) { panel in
-            paneView(for: panel)
-          }
-        }
-      }
+      layoutView(for: splitLayout.root)
     } else if let panel = session.visiblePanels.first {
       paneView(for: panel)
     } else {
       Text("No terminal available")
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  private func layoutView(for node: TerminalSplitLayout.Node) -> AnyView {
+    switch node {
+    case .panel(let panelID):
+      if let panel = session.panel(for: panelID) {
+        AnyView(paneView(for: panel))
+      } else {
+        AnyView(EmptyView())
+      }
+    case .split(let axis, let children):
+      AnyView(splitView(axis: axis, children: children))
+    }
+  }
+
+  private func splitView(
+    axis: TerminalSplitAxis,
+    children: [TerminalSplitLayout.Node]
+  ) -> some View {
+    GeometryReader { proxy in
+      let dividerSize = 1.0
+      let childCount = max(children.count, 1)
+
+      switch axis {
+      case .horizontal:
+        let totalDividerWidth = dividerSize * Double(max(children.count - 1, 0))
+        let childWidth = max(0, proxy.size.width - totalDividerWidth) / Double(childCount)
+
+        HStack(spacing: 0) {
+          ForEach(Array(children.enumerated()), id: \.offset) { offset, child in
+            if offset > 0 {
+              splitDivider(axis: axis)
+            }
+            layoutView(for: child)
+              .frame(width: childWidth, height: proxy.size.height)
+          }
+        }
+      case .vertical:
+        let totalDividerHeight = dividerSize * Double(max(children.count - 1, 0))
+        let childHeight = max(0, proxy.size.height - totalDividerHeight) / Double(childCount)
+
+        VStack(spacing: 0) {
+          ForEach(Array(children.enumerated()), id: \.offset) { offset, child in
+            if offset > 0 {
+              splitDivider(axis: axis)
+            }
+            layoutView(for: child)
+              .frame(width: proxy.size.width, height: childHeight)
+          }
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func splitDivider(axis: TerminalSplitAxis) -> some View {
+    switch axis {
+    case .horizontal:
+      Color.primary.opacity(0.35)
+        .frame(width: 1)
+    case .vertical:
+      Color.primary.opacity(0.35)
+        .frame(height: 1)
     }
   }
 
