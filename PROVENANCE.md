@@ -75,7 +75,6 @@ Status meanings:
 | `Sources/GhosttySwift/TerminalSession.swift` | fresh-wrapper | Apple Observation patterns, current wrapper runtime/controller orchestration |
 | `Sources/GhosttySwift/TerminalManager.swift` | fresh-wrapper | Apple Observation patterns, current wrapper session orchestration |
 | `Sources/GhosttySwift/TerminalHostedContainerView.swift` | fresh-wrapper | Apple AppKit/SwiftUI bridging patterns |
-| `Sources/GhosttySwift/TerminalTabShape.swift` | fresh-wrapper | Apple SwiftUI tab composition |
 | `Sources/GhosttySwift/TerminalTabStripView.swift` | fresh-wrapper | Apple SwiftUI tab composition |
 | `Sources/GhosttySwift/TerminalTabStripItemView.swift` | fresh-wrapper | Apple SwiftUI tab composition |
 | `Sources/GhosttySwift/TerminalSurfacePaneView.swift` | fresh-wrapper | Apple SwiftUI split-pane composition |

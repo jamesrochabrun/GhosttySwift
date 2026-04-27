@@ -8,10 +8,12 @@ struct TerminalSurfacePaneView: View {
   let showsTabBar: Bool
   let canClosePanel: Bool
   let canCloseTab: (TerminalTab) -> Bool
+  let canOpenTab: Bool
   let onActivate: () -> Void
   let onClosePanel: () -> Void
   let onSelectTab: (TerminalTab) -> Void
   let onCloseTab: (TerminalTab) -> Void
+  let onOpenTab: () -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -46,10 +48,12 @@ struct TerminalSurfacePaneView: View {
           panel: panel,
           canClosePanel: canClosePanel,
           canCloseTab: canCloseTab,
+          canOpenTab: canOpenTab,
           onActivatePanel: onActivate,
           onClosePanel: onClosePanel,
           onSelectTab: onSelectTab,
-          onCloseTab: onCloseTab
+          onCloseTab: onCloseTab,
+          onOpenTab: onOpenTab
         )
       }
 
