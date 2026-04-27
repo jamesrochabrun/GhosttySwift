@@ -64,7 +64,7 @@ struct TerminalSurfacePaneView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(nsColor: .windowBackgroundColor))
+    .background(Color.clear)
     .overlay {
       if isActive {
         Rectangle()

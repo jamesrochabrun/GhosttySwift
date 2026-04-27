@@ -15,6 +15,8 @@ public final class GhosttyTerminalContainerView: NSView {
   private let childExitHostingView: NSHostingView<GhosttyTerminalChildExitBannerHostView>
   private var localKeyMonitor: Any?
 
+  public override var isOpaque: Bool { false }
+
   public init(controller: GhosttyTerminalController) throws {
     self.controller = controller
     self.bridge = controller.bridge
@@ -36,6 +38,10 @@ public final class GhosttyTerminalContainerView: NSView {
       rootView: GhosttyTerminalChildExitBannerHostView(model: overlayModel)
     )
     super.init(frame: .zero)
+
+    wantsLayer = true
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.isOpaque = false
 
     addSubview(scrollView)
     addSubview(searchOverlayHostingView)

@@ -32,6 +32,7 @@ public final class GhosttySurfaceView: NSView {
   var keyTextAccumulator: [String]?
 
   public override var acceptsFirstResponder: Bool { true }
+  public override var isOpaque: Bool { false }
 
   private var contentSize: NSSize {
     get { contentSizeBacking ?? bounds.size }
@@ -50,6 +51,8 @@ public final class GhosttySurfaceView: NSView {
     super.init(frame: .zero)
 
     wantsLayer = true
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.isOpaque = false
 
     bridge.attach(to: self)
     bridge.internalOnClose = { [weak self] _ in
@@ -452,10 +455,16 @@ final class GhosttySurfaceScrollView: NSView {
   private var isLiveScrolling = false
   private var lastSentRow: Int?
 
+  override var isOpaque: Bool { false }
+
   init(surfaceView: GhosttySurfaceView, controller: GhosttyTerminalController) {
     self.surfaceView = surfaceView
     self.controller = controller
     super.init(frame: .zero)
+
+    wantsLayer = true
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.isOpaque = false
 
     scrollView.hasVerticalScroller = false
     scrollView.hasHorizontalScroller = false
@@ -466,6 +475,9 @@ final class GhosttySurfaceScrollView: NSView {
     scrollView.contentView.clipsToBounds = false
 
     documentView.frame = .zero
+    documentView.wantsLayer = true
+    documentView.layer?.backgroundColor = NSColor.clear.cgColor
+    documentView.layer?.isOpaque = false
     scrollView.documentView = documentView
     documentView.addSubview(surfaceView)
 
