@@ -2,6 +2,8 @@ import SwiftUI
 
 public typealias TerminalPanelClosePolicy = (TerminalPanel) -> Bool
 public typealias TerminalTabClosePolicy = (TerminalPanel, TerminalTab) -> Bool
+public typealias TerminalPanelActivationHandler = (TerminalPanel) -> Void
+public typealias TerminalTabSelectionHandler = (TerminalPanel, TerminalTab) -> Void
 public typealias TerminalPanelCloseHandler = (TerminalPanel) -> Void
 public typealias TerminalTabCloseHandler = (TerminalPanel, TerminalTab) -> Void
 
@@ -14,6 +16,8 @@ public struct TerminalSurfaceView: View {
   private let allowsClosingTabs: Bool
   private let panelClosePolicy: TerminalPanelClosePolicy?
   private let tabClosePolicy: TerminalTabClosePolicy?
+  private let onActivatePanel: TerminalPanelActivationHandler?
+  private let onSelectTab: TerminalTabSelectionHandler?
   private let onClosePanel: TerminalPanelCloseHandler?
   private let onCloseTab: TerminalTabCloseHandler?
 
@@ -25,6 +29,8 @@ public struct TerminalSurfaceView: View {
     allowsClosingTabs: Bool = true,
     panelClosePolicy: TerminalPanelClosePolicy? = nil,
     tabClosePolicy: TerminalTabClosePolicy? = nil,
+    onActivatePanel: TerminalPanelActivationHandler? = nil,
+    onSelectTab: TerminalTabSelectionHandler? = nil,
     onClosePanel: TerminalPanelCloseHandler? = nil,
     onCloseTab: TerminalTabCloseHandler? = nil
   ) {
@@ -35,6 +41,8 @@ public struct TerminalSurfaceView: View {
     self.allowsClosingTabs = allowsClosingTabs
     self.panelClosePolicy = panelClosePolicy
     self.tabClosePolicy = tabClosePolicy
+    self.onActivatePanel = onActivatePanel
+    self.onSelectTab = onSelectTab
     self.onClosePanel = onClosePanel
     self.onCloseTab = onCloseTab
   }
@@ -123,9 +131,9 @@ public struct TerminalSurfaceView: View {
       showsTabBar: showsTabBar && (panel.tabs.count > 1 || session.visiblePanels.count > 1),
       canClosePanel: canClosePanel(panel),
       canCloseTab: { tab in canCloseTab(tab, in: panel) },
-      onActivate: { session.focusPanel(panel.id) },
+      onActivate: { activatePanel(panel) },
       onClosePanel: { closePanel(panel) },
-      onSelectTab: { tab in session.selectTab(tab.id, in: panel.id) },
+      onSelectTab: { tab in selectTab(tab, in: panel) },
       onCloseTab: { tab in closeTab(tab, in: panel) }
     )
   }
@@ -150,6 +158,22 @@ public struct TerminalSurfaceView: View {
     }
 
     return tabClosePolicy?(panel, tab) ?? true
+  }
+
+  private func activatePanel(_ panel: TerminalPanel) {
+    if let onActivatePanel {
+      onActivatePanel(panel)
+    } else {
+      _ = session.focusPanel(panel.id)
+    }
+  }
+
+  private func selectTab(_ tab: TerminalTab, in panel: TerminalPanel) {
+    if let onSelectTab {
+      onSelectTab(panel, tab)
+    } else {
+      _ = session.selectTab(tab.id, in: panel.id)
+    }
   }
 
   private func closePanel(_ panel: TerminalPanel) {
