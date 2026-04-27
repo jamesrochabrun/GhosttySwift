@@ -131,12 +131,13 @@ public struct TerminalSurfaceView: View {
   }
 
   private func paneView(for panel: TerminalPanel) -> some View {
-    TerminalSurfacePaneView(
+    let isPanelClosable = canClosePanel(panel)
+    return TerminalSurfacePaneView(
       panel: panel,
       isActive: panel.id == session.activePanelID && session.visiblePanels.count > 1,
       showsPaneLabel: showsPaneLabels,
-      showsTabBar: showsTabBar && panel.tabs.count > 1,
-      canClosePanel: canClosePanel(panel),
+      showsTabBar: showsTabBar && (panel.tabs.count > 1 || isPanelClosable),
+      canClosePanel: isPanelClosable,
       canCloseTab: { tab in canCloseTab(tab, in: panel) },
       canOpenTab: allowsOpeningTabs,
       onActivate: { activatePanel(panel) },
