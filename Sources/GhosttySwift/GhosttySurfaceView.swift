@@ -20,6 +20,7 @@ public final class GhosttySurfaceView: NSView {
 
   public let bridge: GhosttySurfaceBridge
   public var activeCursor: NSCursor = .iBeam
+  public var closesHostWindowOnClose = true
 
   private let runtime: GhosttyRuntime
   private let configuration: GhosttySurfaceConfiguration
@@ -53,10 +54,12 @@ public final class GhosttySurfaceView: NSView {
     bridge.attach(to: self)
     bridge.internalOnClose = { [weak self] _ in
       GhosttyTrace.write("surface view bridge onClose")
+      guard self?.closesHostWindowOnClose == true else { return }
       self?.window?.performClose(nil)
     }
     bridge.internalOnCloseWindow = { [weak self] in
       GhosttyTrace.write("surface view bridge onCloseWindow")
+      guard self?.closesHostWindowOnClose == true else { return }
       self?.window?.performClose(nil)
     }
 

@@ -42,6 +42,30 @@ func terminalViewCanBeConstructedFromController() throws {
 
 @MainActor
 @Test
+func terminalSurfaceViewAcceptsHostClosePolicy() throws {
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    )
+  )
+  let view = TerminalSurfaceView(
+    session: session,
+    panelClosePolicy: { _ in false },
+    tabClosePolicy: { _, _ in false },
+    onClosePanel: { _ in },
+    onCloseTab: { _, _ in }
+  )
+  let controller = try #require(session.primaryPanel.activeTab?.controller)
+
+  #expect(controller.closesHostWindowOnClose)
+  controller.closesHostWindowOnClose = false
+
+  #expect(String(describing: type(of: view)).contains("TerminalSurfaceView"))
+  #expect(!controller.closesHostWindowOnClose)
+}
+
+@MainActor
+@Test
 func controllerPublicInputMethodsAreSafeBeforeSurfaceAttachment() throws {
   let controller = try GhosttyTerminalController(
     configuration: GhosttySurfaceConfiguration(
@@ -54,6 +78,7 @@ func controllerPublicInputMethodsAreSafeBeforeSurfaceAttachment() throws {
   controller.sendBytes(Array("world".utf8))
   controller.sendReturnKey()
   controller.sendArrowDownKey()
+  #expect(!controller.startSearch())
   controller.requestClose()
 
   #expect(controller.configuration.environment["TERM_PROGRAM"] == "AgentHub")
@@ -496,6 +521,24 @@ func tabClosePolicyProtectsPrimaryPanelLastTab() {
   #expect(!TerminalPanel.canCloseTab(panelRole: .primary, tabCount: 1))
   #expect(TerminalPanel.canCloseTab(panelRole: .primary, tabCount: 2))
   #expect(TerminalPanel.canCloseTab(panelRole: .auxiliary, tabCount: 1))
+}
+
+@MainActor
+@Test
+func sessionRequestCloseAllIsSafeBeforeSurfaceAttachment() throws {
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    )
+  )
+  _ = try session.openTab(configuration: GhosttySurfaceConfiguration(workingDirectory: "/tmp"))
+  _ = try session.openPanel(configuration: GhosttySurfaceConfiguration(workingDirectory: "/tmp"))
+
+  session.requestCloseAll()
+
+  #expect(session.panels.count == 2)
+  #expect(session.primaryPanel.tabs.count == 2)
+  #expect(session.auxiliaryPanels.first?.tabs.count == 1)
 }
 
 @Test

@@ -105,6 +105,15 @@ public final class GhosttyTerminalController {
     bridge.surfaceView?.requestClose()
   }
 
+  public var closesHostWindowOnClose: Bool {
+    get {
+      bridge.surfaceView?.closesHostWindowOnClose ?? true
+    }
+    set {
+      bridge.surfaceView?.closesHostWindowOnClose = newValue
+    }
+  }
+
   @discardableResult
   public func performBindingAction(_ action: String) -> Bool {
     bridge.surfaceView?.performBindingAction(action) ?? false
@@ -113,6 +122,11 @@ public final class GhosttyTerminalController {
   @discardableResult
   public func setSearchNeedle(_ needle: String) -> Bool {
     return performBindingAction("search:\(needle)")
+  }
+
+  @discardableResult
+  public func startSearch() -> Bool {
+    performBindingAction("start_search")
   }
 
   @discardableResult

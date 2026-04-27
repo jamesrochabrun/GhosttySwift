@@ -247,6 +247,14 @@ public final class TerminalSession {
     )
   }
 
+  public func requestCloseAll() {
+    for panel in panels {
+      for tab in panel.tabs {
+        tab.controller.requestClose()
+      }
+    }
+  }
+
   @discardableResult
   public func focusPanel(_ id: TerminalPanelID) -> Bool {
     guard let panel = panel(for: id) else { return false }
