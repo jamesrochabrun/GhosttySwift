@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import GhosttyKit
 import QuartzCore
 
@@ -213,18 +214,22 @@ public final class GhosttySurfaceView: NSView {
     withOptionalCString(configuration.workingDirectory) { workingDirectoryPointer in
       withOptionalCString(configuration.command) { commandPointer in
         withOptionalCString(configuration.initialInput) { initialInputPointer in
-          var config = ghostty_surface_config_new()
-          config.platform_tag = GHOSTTY_PLATFORM_MACOS
-          config.platform.macos.nsview = Unmanaged.passUnretained(self).toOpaque()
-          config.userdata = Unmanaged.passUnretained(bridge).toOpaque()
-          config.scale_factor = scaleFactor
-          config.font_size = configuration.fontSize
-          config.working_directory = workingDirectoryPointer
-          config.command = commandPointer
-          config.initial_input = initialInputPointer
-          config.wait_after_command = false
-          config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
-          return body(&config)
+          withEnvironmentVariables(configuration.environment) { environmentPointer, environmentCount in
+            var config = ghostty_surface_config_new()
+            config.platform_tag = GHOSTTY_PLATFORM_MACOS
+            config.platform.macos.nsview = Unmanaged.passUnretained(self).toOpaque()
+            config.userdata = Unmanaged.passUnretained(bridge).toOpaque()
+            config.scale_factor = scaleFactor
+            config.font_size = configuration.fontSize
+            config.working_directory = workingDirectoryPointer
+            config.command = commandPointer
+            config.env_vars = environmentPointer
+            config.env_var_count = environmentCount
+            config.initial_input = initialInputPointer
+            config.wait_after_command = false
+            config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
+            return body(&config)
+          }
         }
       }
     }
@@ -240,6 +245,41 @@ public final class GhosttySurfaceView: NSView {
 
     return value.withCString { pointer in
       body(pointer)
+    }
+  }
+
+  private func withEnvironmentVariables<T>(
+    _ environment: [String: String],
+    _ body: (UnsafeMutablePointer<ghostty_env_var_s>?, Int) -> T
+  ) -> T {
+    guard !environment.isEmpty else {
+      return body(nil, 0)
+    }
+
+    var allocatedPointers: [UnsafeMutablePointer<CChar>] = []
+    allocatedPointers.reserveCapacity(environment.count * 2)
+    defer {
+      for pointer in allocatedPointers {
+        free(pointer)
+      }
+    }
+
+    var envVars: [ghostty_env_var_s] = environment
+      .sorted { $0.key < $1.key }
+      .compactMap { key, value in
+        guard let keyPointer = strdup(key), let valuePointer = strdup(value) else {
+          return nil
+        }
+        allocatedPointers.append(keyPointer)
+        allocatedPointers.append(valuePointer)
+        return ghostty_env_var_s(
+          key: UnsafePointer(keyPointer),
+          value: UnsafePointer(valuePointer)
+        )
+      }
+
+    return envVars.withUnsafeMutableBufferPointer { buffer in
+      body(buffer.baseAddress, buffer.count)
     }
   }
 
@@ -269,13 +309,50 @@ public final class GhosttySurfaceView: NSView {
     ghostty_surface_set_size(surfaceHandle, width, height)
   }
 
-  func sendText(_ text: String) {
+  public func sendText(_ text: String) {
     guard let surfaceHandle else { return }
     let utf8Count = text.utf8CString.count
     guard utf8Count > 1 else { return }
     text.withCString { pointer in
       ghostty_surface_text(surfaceHandle, pointer, UInt(utf8Count - 1))
     }
+  }
+
+  public func sendKeyPress(
+    keyCode: UInt32,
+    text: String? = nil,
+    modifiers: NSEvent.ModifierFlags = []
+  ) {
+    guard let surfaceHandle else { return }
+    var keyEvent = ghostty_input_key_s()
+    keyEvent.action = GHOSTTY_ACTION_PRESS
+    keyEvent.mods = GhosttyKeyMap.mods(from: modifiers)
+    keyEvent.consumed_mods = GhosttyKeyMap.mods(from: modifiers.subtracting([.control, .command]))
+    keyEvent.keycode = keyCode
+    keyEvent.text = nil
+    keyEvent.unshifted_codepoint = text?.unicodeScalars.first?.value ?? 0
+    keyEvent.composing = false
+
+    if let text, !text.isEmpty {
+      text.withCString { pointer in
+        keyEvent.text = pointer
+        _ = ghostty_surface_key(surfaceHandle, keyEvent)
+      }
+    } else {
+      _ = ghostty_surface_key(surfaceHandle, keyEvent)
+    }
+  }
+
+  public func requestClose() {
+    guard let surfaceHandle else { return }
+    ghostty_surface_request_close(surfaceHandle)
+  }
+
+  public var foregroundProcessID: pid_t? {
+    guard let surfaceHandle else { return nil }
+    let pid = ghostty_surface_foreground_pid(surfaceHandle)
+    guard pid > 0 else { return nil }
+    return pid_t(pid)
   }
 
   func syncPreedit(clearIfNeeded: Bool = true) {

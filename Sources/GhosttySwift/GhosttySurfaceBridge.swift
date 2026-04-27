@@ -67,6 +67,7 @@ public final class GhosttySurfaceBridge {
   public var onClose: ((Bool) -> Void)?
   public var onCloseWindow: (() -> Void)?
   public var onDesktopNotification: ((GhosttySurfaceDesktopNotification) -> Void)?
+  public var onOpenURL: ((String) -> Bool)?
   public var onStateChange: (() -> Void)?
 
   weak var surfaceView: GhosttySurfaceView?
@@ -101,6 +102,14 @@ public final class GhosttySurfaceBridge {
       onDesktopNotification?(notification)
       onStateChange?()
       return true
+
+    case GHOSTTY_ACTION_OPEN_URL:
+      guard let urlPointer = action.action.open_url.url else { return false }
+      let buffer = UnsafeRawBufferPointer(
+        start: urlPointer,
+        count: Int(action.action.open_url.len)
+      )
+      return onOpenURL?(String(decoding: buffer, as: UTF8.self)) ?? false
 
     case GHOSTTY_ACTION_SET_TITLE:
       guard let titlePointer = action.action.set_title.title else { return false }

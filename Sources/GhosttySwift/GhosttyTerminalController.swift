@@ -22,6 +22,7 @@ public final class GhosttyTerminalController {
   public var onClose: ((Bool) -> Void)?
   public var onCloseWindow: (() -> Void)?
   public var onDesktopNotification: ((GhosttySurfaceDesktopNotification) -> Void)?
+  public var onOpenURL: ((String) -> Bool)?
 
   var internalOnStateChange: ((GhosttyTerminalController) -> Void)?
 
@@ -68,12 +69,40 @@ public final class GhosttyTerminalController {
       self.onStateChange?(self)
       self.onDesktopNotification?(notification)
     }
+    bridge.onOpenURL = { [weak self] url in
+      self?.onOpenURL?(url) ?? false
+    }
 
     syncFromBridge()
   }
 
   public func focusTerminal() {
     bridge.surfaceView?.claimFirstResponder()
+  }
+
+  public var foregroundProcessID: pid_t? {
+    bridge.surfaceView?.foregroundProcessID
+  }
+
+  public func sendText(_ text: String) {
+    bridge.surfaceView?.sendText(text)
+  }
+
+  public func sendBytes(_ bytes: [UInt8]) {
+    guard let text = String(bytes: bytes, encoding: .utf8) else { return }
+    sendText(text)
+  }
+
+  public func sendReturnKey() {
+    bridge.surfaceView?.sendKeyPress(keyCode: 36, text: "\r")
+  }
+
+  public func sendArrowDownKey() {
+    bridge.surfaceView?.sendKeyPress(keyCode: 125)
+  }
+
+  public func requestClose() {
+    bridge.surfaceView?.requestClose()
   }
 
   @discardableResult

@@ -8,6 +8,7 @@ func surfaceConfigurationDefaultsAreEmpty() {
 
   #expect(configuration.workingDirectory == nil)
   #expect(configuration.command == nil)
+  #expect(configuration.environment.isEmpty)
   #expect(configuration.initialInput == nil)
   #expect(configuration.fontSize == 0)
 }
@@ -35,7 +36,51 @@ func terminalViewCanBeConstructedFromController() throws {
   let view = GhosttyTerminalView(controller: controller)
 
   #expect(controller.title == "Ghostty")
+  #expect(controller.foregroundProcessID == nil)
   #expect(String(describing: type(of: view)).contains("GhosttyTerminalView"))
+}
+
+@MainActor
+@Test
+func controllerPublicInputMethodsAreSafeBeforeSurfaceAttachment() throws {
+  let controller = try GhosttyTerminalController(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      environment: ["TERM_PROGRAM": "AgentHub"]
+    )
+  )
+
+  controller.sendText("hello")
+  controller.sendBytes(Array("world".utf8))
+  controller.sendReturnKey()
+  controller.sendArrowDownKey()
+  controller.requestClose()
+
+  #expect(controller.configuration.environment["TERM_PROGRAM"] == "AgentHub")
+}
+
+@MainActor
+@Test
+func bridgeOpenURLActionDelegatesToCallback() {
+  let bridge = GhosttySurfaceBridge()
+  var openedURL: String?
+  bridge.onOpenURL = { url in
+    openedURL = url
+    return true
+  }
+
+  "https://agenthub.local".withCString { pointer in
+    var action = ghostty_action_s()
+    action.tag = GHOSTTY_ACTION_OPEN_URL
+    action.action.open_url = ghostty_action_open_url_s(
+      kind: GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN,
+      url: pointer,
+      len: UInt("https://agenthub.local".utf8.count)
+    )
+    #expect(bridge.handleAction(action))
+  }
+
+  #expect(openedURL == "https://agenthub.local")
 }
 
 @Test
