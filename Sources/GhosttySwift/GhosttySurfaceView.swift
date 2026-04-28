@@ -30,6 +30,7 @@ public final class GhosttySurfaceView: NSView {
   private var titleChangeTimer: Timer?
   private var lastSentSurfaceSize: (width: UInt32, height: UInt32)?
   private var createdScaleFactor: CGFloat?
+  private static let fallbackMinimumSurfacePixelSize = (width: UInt32(80), height: UInt32(68))
   var markedText = NSMutableAttributedString()
   var keyTextAccumulator: [String]?
 
@@ -106,8 +107,9 @@ public final class GhosttySurfaceView: NSView {
   public override func layout() {
     super.layout()
     contentSize = bounds.size
-    let scaledSize = backingPixelSize(for: contentSize)
-    setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    if let scaledSize = backingPixelSize(for: contentSize) {
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
     syncFocus()
   }
 
@@ -125,8 +127,9 @@ public final class GhosttySurfaceView: NSView {
   func prepareForHostResize(to size: CGSize) {
     guard size.width > 0, size.height > 0 else { return }
     contentSize = NSSize(width: size.width, height: size.height)
-    let scaledSize = backingPixelSize(for: size)
-    setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    if let scaledSize = backingPixelSize(for: size) {
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
   }
 
   public override func viewDidChangeBackingProperties() {
@@ -247,8 +250,10 @@ public final class GhosttySurfaceView: NSView {
     if let initialSize = configuration.initialSize,
        initialSize.width > 0,
        initialSize.height > 0 {
-      let scaledSize = Self.pixelSize(for: initialSize, scale: initialScaleCGFloat)
-      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+      if let scaledSize = Self.pixelSize(for: initialSize, scale: initialScaleCGFloat),
+         isValidSurfacePixelSize(scaledSize) {
+        setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+      }
     }
     updateSurfaceMetrics()
   }
@@ -353,26 +358,30 @@ public final class GhosttySurfaceView: NSView {
     let scale = contentScaleForSurface()
 
     ghostty_surface_set_content_scale(surfaceHandle, scale.x, scale.y)
-    let scaledSize = backingPixelSize(for: contentSize)
-    setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    if let scaledSize = backingPixelSize(for: contentSize) {
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
 
     syncFocus()
   }
 
-  private func backingPixelSize(for size: CGSize) -> (width: UInt32, height: UInt32) {
+  private func backingPixelSize(for size: CGSize) -> (width: UInt32, height: UInt32)? {
+    guard size.width > 0, size.height > 0 else { return nil }
+
+    let pixelSize: (width: UInt32, height: UInt32)?
     if window == nil, let scale = createdScaleFactor {
-      return Self.pixelSize(
+      pixelSize = Self.pixelSize(
         width: size.width,
         height: size.height,
         scale: scale
       )
+    } else {
+      let backingSize = convertToBacking(NSRect(origin: .zero, size: size)).size
+      pixelSize = Self.pixelSize(width: backingSize.width, height: backingSize.height, scale: 1)
     }
 
-    let backingSize = convertToBacking(NSRect(origin: .zero, size: size)).size
-    return (
-      width: Self.pixelDimension(backingSize.width),
-      height: Self.pixelDimension(backingSize.height)
-    )
+    guard let pixelSize, isValidSurfacePixelSize(pixelSize) else { return nil }
+    return pixelSize
   }
 
   private func contentScaleForSurface() -> (x: CGFloat, y: CGFloat) {
@@ -395,7 +404,7 @@ public final class GhosttySurfaceView: NSView {
   private static func pixelSize(
     for size: GhosttySurfaceInitialSize,
     scale: CGFloat
-  ) -> (width: UInt32, height: UInt32) {
+  ) -> (width: UInt32, height: UInt32)? {
     pixelSize(width: CGFloat(size.width), height: CGFloat(size.height), scale: scale)
   }
 
@@ -403,12 +412,41 @@ public final class GhosttySurfaceView: NSView {
     width: CGFloat,
     height: CGFloat,
     scale: CGFloat
-  ) -> (width: UInt32, height: UInt32) {
-    (width: pixelDimension(width * scale), height: pixelDimension(height * scale))
+  ) -> (width: UInt32, height: UInt32)? {
+    guard
+      width > 0,
+      height > 0,
+      scale > 0,
+      let pixelWidth = pixelDimension(width * scale),
+      let pixelHeight = pixelDimension(height * scale)
+    else {
+      return nil
+    }
+
+    return (width: pixelWidth, height: pixelHeight)
   }
 
-  private static func pixelDimension(_ value: CGFloat) -> UInt32 {
-    UInt32(max(1, value.rounded(.toNearestOrAwayFromZero)))
+  private static func pixelDimension(_ value: CGFloat) -> UInt32? {
+    let rounded = value.rounded(.toNearestOrAwayFromZero)
+    guard rounded > 0, rounded <= CGFloat(UInt32.max) else { return nil }
+    return UInt32(rounded)
+  }
+
+  private var minimumSurfacePixelSize: (width: UInt32, height: UInt32) {
+    guard
+      let sizeLimit = bridge.sizeLimit,
+      sizeLimit.minWidth > 0,
+      sizeLimit.minHeight > 0
+    else {
+      return Self.fallbackMinimumSurfacePixelSize
+    }
+
+    return (width: sizeLimit.minWidth, height: sizeLimit.minHeight)
+  }
+
+  private func isValidSurfacePixelSize(_ size: (width: UInt32, height: UInt32)) -> Bool {
+    let minimumSize = minimumSurfacePixelSize
+    return size.width >= minimumSize.width && size.height >= minimumSize.height
   }
 
   private func setSurfaceSize(width: UInt32, height: UInt32) {
