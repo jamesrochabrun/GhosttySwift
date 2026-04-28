@@ -102,6 +102,44 @@ dimensions and `ghostty_surface_set_size` in lockstep. Disable implicit layer
 actions during resize and skip zero or sub-minimum transient sizes; otherwise
 Core Animation can stretch stale frames and Ghostty can receive invalid grids.
 
+## Binary Release Workflow
+
+`GhosttyKit.xcframework` is a generated binary artifact. Do not commit it to git
+and do not restore the package manifest to a local `Frameworks/` path for public
+tags. Public GhosttySwift versions must be self-contained for SwiftPM consumers:
+`Package.swift` at the tag must reference that same version's
+`GhosttyKit.xcframework.zip` release asset with the matching checksum.
+
+Consumers should only need to pin a version, for example:
+
+```swift
+.package(url: "https://github.com/jamesrochabrun/GhosttySwift", exact: "1.0.4")
+```
+
+To publish a release when the framework binary has not changed, run the
+`Release GhosttySwift` GitHub Action with:
+
+- `version`: the new version, such as `1.0.4`
+- `binary_source`: `carry-forward`
+- `source_release`: the previous release, or `latest`
+
+The workflow downloads the previous `GhosttyKit.xcframework.zip`, updates
+`Package.swift` to the new release URL/checksum, commits the manifest change,
+tags the commit, creates the release, and uploads the binary asset.
+
+For local release preparation or updated framework binaries, use:
+
+```sh
+Scripts/prepare-binary-release.sh --version 1.0.4 --source-release 1.0.3
+Scripts/prepare-binary-release.sh --version 1.0.4 --artifact Frameworks/GhosttyKit.xcframework
+Scripts/prepare-binary-release.sh --version 1.0.4 --build
+```
+
+`--build` runs `Scripts/build-ghostty.sh` first, so it requires the upstream
+Ghostty build toolchain. After any binary release preparation, verify
+`Package.swift` points at `releases/download/<version>/GhosttyKit.xcframework.zip`
+and uses the checksum printed by the script.
+
 ## Development Rules
 
 - Treat upstream Ghostty and `GhosttyKit` as the source of terminal behavior.

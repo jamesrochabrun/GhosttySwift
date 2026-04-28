@@ -71,3 +71,23 @@ Run:
 swift test --package-path /Users/jamesrochabrun/Desktop/git/GhosttySwift
 git diff --check
 ```
+
+## Binary Release Notes
+
+Do not commit `Frameworks/GhosttyKit.xcframework` to git. Public package tags
+must use a remote SwiftPM binary target that points to the matching GitHub
+release asset:
+
+```text
+https://github.com/jamesrochabrun/GhosttySwift/releases/download/<version>/GhosttyKit.xcframework.zip
+```
+
+For a new release that reuses the same framework binary, run the
+`Release GhosttySwift` GitHub Action with `binary_source=carry-forward` and
+`source_release=latest` or the previous tag. The action updates `Package.swift`,
+commits, tags, creates the release, and uploads the zip asset.
+
+For local preparation, use `Scripts/prepare-binary-release.sh`. It can carry
+forward an existing release asset, package a local `GhosttyKit.xcframework`, or
+run `Scripts/build-ghostty.sh` before packaging. Package consumers should not
+need these steps; they only pin a released GhosttySwift version.
