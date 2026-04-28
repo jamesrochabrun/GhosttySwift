@@ -97,7 +97,8 @@ public final class GhosttyRuntime {
   }
 
   public func tick() {
-    ghostty_app_tick(appHandle)
+    guard let appHandleStorage else { return }
+    ghostty_app_tick(appHandleStorage)
   }
 
   private func installApplicationObservers() {

@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import GhosttyKit
 import QuartzCore
 
@@ -19,6 +20,7 @@ public final class GhosttySurfaceView: NSView {
 
   public let bridge: GhosttySurfaceBridge
   public var activeCursor: NSCursor = .iBeam
+  public var closesHostWindowOnClose = true
 
   private let runtime: GhosttyRuntime
   private let configuration: GhosttySurfaceConfiguration
@@ -26,10 +28,14 @@ public final class GhosttySurfaceView: NSView {
   private var contentSizeBacking: NSSize?
   private var isObservingWindowNotifications = false
   private var titleChangeTimer: Timer?
+  private var lastSentSurfaceSize: (width: UInt32, height: UInt32)?
+  private var createdScaleFactor: CGFloat?
+  private static let fallbackMinimumSurfacePixelSize = (width: UInt32(80), height: UInt32(68))
   var markedText = NSMutableAttributedString()
   var keyTextAccumulator: [String]?
 
   public override var acceptsFirstResponder: Bool { true }
+  public override var isOpaque: Bool { false }
 
   private var contentSize: NSSize {
     get { contentSizeBacking ?? bounds.size }
@@ -45,17 +51,35 @@ public final class GhosttySurfaceView: NSView {
     self.runtime = runtime
     self.configuration = configuration
     self.bridge = bridge
-    super.init(frame: .zero)
+
+    let initialFrame = configuration.initialSize.flatMap { size -> NSRect? in
+      guard size.width > 0, size.height > 0 else { return nil }
+      return NSRect(x: 0, y: 0, width: size.width, height: size.height)
+    } ?? .zero
+    super.init(frame: initialFrame)
+    if initialFrame.size != .zero {
+      contentSizeBacking = initialFrame.size
+    }
 
     wantsLayer = true
+    // Ghostty drives its own Metal rendering, so AppKit should not interpolate or
+    // implicitly animate layer contents while pane sizes are changing.
+    layerContentsRedrawPolicy = .never
+    layerContentsPlacement = .topLeft
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.isOpaque = false
+    layer?.contentsGravity = .topLeft
+    layer?.actions = GhosttyLayerActions.disabled
 
     bridge.attach(to: self)
     bridge.internalOnClose = { [weak self] _ in
       GhosttyTrace.write("surface view bridge onClose")
+      guard self?.closesHostWindowOnClose == true else { return }
       self?.window?.performClose(nil)
     }
     bridge.internalOnCloseWindow = { [weak self] in
       GhosttyTrace.write("surface view bridge onCloseWindow")
+      guard self?.closesHostWindowOnClose == true else { return }
       self?.window?.performClose(nil)
     }
 
@@ -83,8 +107,9 @@ public final class GhosttySurfaceView: NSView {
   public override func layout() {
     super.layout()
     contentSize = bounds.size
-    let scaledSize = convertToBacking(contentSize)
-    setSurfaceSize(width: UInt32(scaledSize.width), height: UInt32(scaledSize.height))
+    if let scaledSize = backingPixelSize(for: contentSize) {
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
     syncFocus()
   }
 
@@ -94,12 +119,22 @@ public final class GhosttySurfaceView: NSView {
     installTrackingAreaIfNeeded()
     installWindowObservers()
     updateDisplayID()
+    configureSublayersForCleanResize()
     updateSurfaceMetrics()
     claimFirstResponder()
   }
 
+  func prepareForHostResize(to size: CGSize) {
+    guard size.width > 0, size.height > 0 else { return }
+    contentSize = NSSize(width: size.width, height: size.height)
+    if let scaledSize = backingPixelSize(for: size) {
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
+  }
+
   public override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
+    configureSublayersForCleanResize()
     updateSurfaceMetrics()
   }
 
@@ -190,7 +225,15 @@ public final class GhosttySurfaceView: NSView {
 
   private func createSurface() throws {
     GhosttyTrace.write("surface view createSurface start")
-    let initialScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+    // Prefer the caller-provided scale (e.g. an existing pane's window scale) so the new
+    // surface starts at the right scale and ghostty doesn't have to rebuild the font atlas
+    // and re-render after viewDidMoveToWindow flips from a screen guess to the window scale.
+    let initialScale = configuration.initialScaleFactor
+      ?? window?.backingScaleFactor
+      ?? NSScreen.main?.backingScaleFactor
+      ?? 2.0
+    let initialScaleCGFloat = CGFloat(initialScale)
+    createdScaleFactor = initialScaleCGFloat
 
     let surface = withSurfaceConfig(scaleFactor: initialScale) { config in
       ghostty_surface_new(runtime.appHandle, &config)
@@ -203,7 +246,27 @@ public final class GhosttySurfaceView: NSView {
 
     self.surfaceHandle = surface
     GhosttyTrace.write("surface view createSurface success")
+    configureSublayersForCleanResize()
+    if let initialSize = configuration.initialSize,
+       initialSize.width > 0,
+       initialSize.height > 0 {
+      if let scaledSize = Self.pixelSize(for: initialSize, scale: initialScaleCGFloat),
+         isValidSurfacePixelSize(scaledSize) {
+        setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+      }
+    }
     updateSurfaceMetrics()
+  }
+
+  private func configureSublayersForCleanResize() {
+    func configure(_ target: CALayer) {
+      target.actions = GhosttyLayerActions.disabled
+      target.contentsGravity = .topLeft
+      for sublayer in target.sublayers ?? [] {
+        configure(sublayer)
+      }
+    }
+    if let layer { configure(layer) }
   }
 
   private func withSurfaceConfig<T>(
@@ -213,18 +276,22 @@ public final class GhosttySurfaceView: NSView {
     withOptionalCString(configuration.workingDirectory) { workingDirectoryPointer in
       withOptionalCString(configuration.command) { commandPointer in
         withOptionalCString(configuration.initialInput) { initialInputPointer in
-          var config = ghostty_surface_config_new()
-          config.platform_tag = GHOSTTY_PLATFORM_MACOS
-          config.platform.macos.nsview = Unmanaged.passUnretained(self).toOpaque()
-          config.userdata = Unmanaged.passUnretained(bridge).toOpaque()
-          config.scale_factor = scaleFactor
-          config.font_size = configuration.fontSize
-          config.working_directory = workingDirectoryPointer
-          config.command = commandPointer
-          config.initial_input = initialInputPointer
-          config.wait_after_command = false
-          config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
-          return body(&config)
+          withEnvironmentVariables(configuration.environment) { environmentPointer, environmentCount in
+            var config = ghostty_surface_config_new()
+            config.platform_tag = GHOSTTY_PLATFORM_MACOS
+            config.platform.macos.nsview = Unmanaged.passUnretained(self).toOpaque()
+            config.userdata = Unmanaged.passUnretained(bridge).toOpaque()
+            config.scale_factor = scaleFactor
+            config.font_size = configuration.fontSize
+            config.working_directory = workingDirectoryPointer
+            config.command = commandPointer
+            config.env_vars = environmentPointer
+            config.env_var_count = environmentCount
+            config.initial_input = initialInputPointer
+            config.wait_after_command = false
+            config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
+            return body(&config)
+          }
         }
       }
     }
@@ -243,6 +310,41 @@ public final class GhosttySurfaceView: NSView {
     }
   }
 
+  private func withEnvironmentVariables<T>(
+    _ environment: [String: String],
+    _ body: (UnsafeMutablePointer<ghostty_env_var_s>?, Int) -> T
+  ) -> T {
+    guard !environment.isEmpty else {
+      return body(nil, 0)
+    }
+
+    var allocatedPointers: [UnsafeMutablePointer<CChar>] = []
+    allocatedPointers.reserveCapacity(environment.count * 2)
+    defer {
+      for pointer in allocatedPointers {
+        free(pointer)
+      }
+    }
+
+    var envVars: [ghostty_env_var_s] = environment
+      .sorted { $0.key < $1.key }
+      .compactMap { key, value in
+        guard let keyPointer = strdup(key), let valuePointer = strdup(value) else {
+          return nil
+        }
+        allocatedPointers.append(keyPointer)
+        allocatedPointers.append(valuePointer)
+        return ghostty_env_var_s(
+          key: UnsafePointer(keyPointer),
+          value: UnsafePointer(valuePointer)
+        )
+      }
+
+    return envVars.withUnsafeMutableBufferPointer { buffer in
+      body(buffer.baseAddress, buffer.count)
+    }
+  }
+
   private func updateSurfaceMetrics() {
     guard let surfaceHandle else { return }
 
@@ -253,29 +355,157 @@ public final class GhosttySurfaceView: NSView {
       CATransaction.commit()
     }
 
-    let framebufferFrame = convertToBacking(frame)
-    let xScale = frame.width > 0 ? framebufferFrame.width / frame.width : 1
-    let yScale = frame.height > 0 ? framebufferFrame.height / frame.height : 1
+    let scale = contentScaleForSurface()
 
-    ghostty_surface_set_content_scale(surfaceHandle, xScale, yScale)
-    let scaledSize = convertToBacking(contentSize)
-    setSurfaceSize(width: UInt32(scaledSize.width), height: UInt32(scaledSize.height))
+    ghostty_surface_set_content_scale(surfaceHandle, scale.x, scale.y)
+    if let scaledSize = backingPixelSize(for: contentSize) {
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
 
     syncFocus()
   }
 
+  private func backingPixelSize(for size: CGSize) -> (width: UInt32, height: UInt32)? {
+    guard size.width > 0, size.height > 0 else { return nil }
+
+    let pixelSize: (width: UInt32, height: UInt32)?
+    if window == nil, let scale = createdScaleFactor {
+      pixelSize = Self.pixelSize(
+        width: size.width,
+        height: size.height,
+        scale: scale
+      )
+    } else {
+      let backingSize = convertToBacking(NSRect(origin: .zero, size: size)).size
+      pixelSize = Self.pixelSize(width: backingSize.width, height: backingSize.height, scale: 1)
+    }
+
+    guard let pixelSize, isValidSurfacePixelSize(pixelSize) else { return nil }
+    return pixelSize
+  }
+
+  private func contentScaleForSurface() -> (x: CGFloat, y: CGFloat) {
+    if let window {
+      return (window.backingScaleFactor, window.backingScaleFactor)
+    }
+
+    if let createdScaleFactor {
+      return (createdScaleFactor, createdScaleFactor)
+    }
+
+    let localUnit = NSRect(x: 0, y: 0, width: 1, height: 1)
+    let backingUnit = convertToBacking(localUnit)
+    return (
+      x: backingUnit.width > 0 ? backingUnit.width : 1,
+      y: backingUnit.height > 0 ? backingUnit.height : 1
+    )
+  }
+
+  private static func pixelSize(
+    for size: GhosttySurfaceInitialSize,
+    scale: CGFloat
+  ) -> (width: UInt32, height: UInt32)? {
+    pixelSize(width: CGFloat(size.width), height: CGFloat(size.height), scale: scale)
+  }
+
+  private static func pixelSize(
+    width: CGFloat,
+    height: CGFloat,
+    scale: CGFloat
+  ) -> (width: UInt32, height: UInt32)? {
+    guard
+      width > 0,
+      height > 0,
+      scale > 0,
+      let pixelWidth = pixelDimension(width * scale),
+      let pixelHeight = pixelDimension(height * scale)
+    else {
+      return nil
+    }
+
+    return (width: pixelWidth, height: pixelHeight)
+  }
+
+  private static func pixelDimension(_ value: CGFloat) -> UInt32? {
+    let rounded = value.rounded(.toNearestOrAwayFromZero)
+    guard rounded > 0, rounded <= CGFloat(UInt32.max) else { return nil }
+    return UInt32(rounded)
+  }
+
+  private var minimumSurfacePixelSize: (width: UInt32, height: UInt32) {
+    guard
+      let sizeLimit = bridge.sizeLimit,
+      sizeLimit.minWidth > 0,
+      sizeLimit.minHeight > 0
+    else {
+      return Self.fallbackMinimumSurfacePixelSize
+    }
+
+    return (width: sizeLimit.minWidth, height: sizeLimit.minHeight)
+  }
+
+  private func isValidSurfacePixelSize(_ size: (width: UInt32, height: UInt32)) -> Bool {
+    let minimumSize = minimumSurfacePixelSize
+    return size.width >= minimumSize.width && size.height >= minimumSize.height
+  }
+
   private func setSurfaceSize(width: UInt32, height: UInt32) {
     guard let surfaceHandle else { return }
+    // Drop 0x0 calls: the surface has no real frame yet (pre-layout), and forwarding
+    // them produces "very small terminal grid" warnings, redundant io_thread resizes,
+    // and an early renderer pass that the IOSurfaceLayer later discards.
+    guard width > 0, height > 0 else { return }
+    if let last = lastSentSurfaceSize, last.width == width, last.height == height {
+      return
+    }
+    lastSentSurfaceSize = (width, height)
     ghostty_surface_set_size(surfaceHandle, width, height)
   }
 
-  func sendText(_ text: String) {
+  public func sendText(_ text: String) {
     guard let surfaceHandle else { return }
     let utf8Count = text.utf8CString.count
     guard utf8Count > 1 else { return }
     text.withCString { pointer in
       ghostty_surface_text(surfaceHandle, pointer, UInt(utf8Count - 1))
     }
+  }
+
+  public func sendKeyPress(
+    keyCode: UInt32,
+    text: String? = nil,
+    modifiers: NSEvent.ModifierFlags = []
+  ) {
+    guard let surfaceHandle else { return }
+    var keyEvent = ghostty_input_key_s()
+    keyEvent.action = GHOSTTY_ACTION_PRESS
+    keyEvent.mods = GhosttyKeyMap.mods(from: modifiers)
+    keyEvent.consumed_mods = GhosttyKeyMap.mods(from: modifiers.subtracting([.control, .command]))
+    keyEvent.keycode = keyCode
+    keyEvent.text = nil
+    keyEvent.unshifted_codepoint = text?.unicodeScalars.first?.value ?? 0
+    keyEvent.composing = false
+
+    if let text, !text.isEmpty {
+      text.withCString { pointer in
+        keyEvent.text = pointer
+        _ = ghostty_surface_key(surfaceHandle, keyEvent)
+      }
+    } else {
+      _ = ghostty_surface_key(surfaceHandle, keyEvent)
+    }
+  }
+
+  public func requestClose() {
+    guard let surfaceHandle else { return }
+    ghostty_surface_request_close(surfaceHandle)
+  }
+
+  public var foregroundProcessID: pid_t? {
+    guard let surfaceHandle else { return nil }
+    let pid = ghostty_surface_foreground_pid(surfaceHandle)
+    guard pid > 0 else { return nil }
+    return pid_t(pid)
   }
 
   func syncPreedit(clearIfNeeded: Bool = true) {
@@ -372,10 +602,20 @@ final class GhosttySurfaceScrollView: NSView {
   private var isLiveScrolling = false
   private var lastSentRow: Int?
 
+  override var isOpaque: Bool { false }
+
   init(surfaceView: GhosttySurfaceView, controller: GhosttyTerminalController) {
     self.surfaceView = surfaceView
     self.controller = controller
     super.init(frame: .zero)
+
+    wantsLayer = true
+    layerContentsRedrawPolicy = .never
+    layerContentsPlacement = .topLeft
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.isOpaque = false
+    layer?.contentsGravity = .topLeft
+    layer?.actions = GhosttyLayerActions.disabled
 
     scrollView.hasVerticalScroller = false
     scrollView.hasHorizontalScroller = false
@@ -386,6 +626,13 @@ final class GhosttySurfaceScrollView: NSView {
     scrollView.contentView.clipsToBounds = false
 
     documentView.frame = .zero
+    documentView.wantsLayer = true
+    documentView.layerContentsRedrawPolicy = .never
+    documentView.layerContentsPlacement = .topLeft
+    documentView.layer?.backgroundColor = NSColor.clear.cgColor
+    documentView.layer?.isOpaque = false
+    documentView.layer?.contentsGravity = .topLeft
+    documentView.layer?.actions = GhosttyLayerActions.disabled
     scrollView.documentView = documentView
     documentView.addSubview(surfaceView)
 
@@ -466,6 +713,10 @@ final class GhosttySurfaceScrollView: NSView {
   func syncFromController() {
     synchronizeAppearance()
     synchronizeScrollView()
+  }
+
+  func prepareForHostResize(to size: CGSize) {
+    surfaceView.prepareForHostResize(to: size)
   }
 
   private func synchronizeAppearance() {

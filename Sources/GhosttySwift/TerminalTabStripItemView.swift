@@ -10,12 +10,12 @@ struct TerminalTabStripItemView: View {
   let onClose: () -> Void
 
   var body: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: 5) {
       Button(action: onSelect) {
         Text(displayName)
-          .font(.callout)
+          .font(.caption2.weight(isSelected ? .medium : .regular))
           .lineLimit(1)
-          .frame(maxWidth: 160, alignment: .leading)
+          .frame(minWidth: 76, maxWidth: 150, alignment: .leading)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
@@ -24,35 +24,35 @@ struct TerminalTabStripItemView: View {
         Button(action: onClose) {
           Label("Close Tab", systemImage: "xmark")
             .labelStyle(.iconOnly)
-            .font(.system(size: 10, weight: .semibold))
-            .frame(width: 22, height: 22)
+            .font(.system(size: 9, weight: .medium))
+            .frame(width: 14, height: 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("Close Tab")
       }
     }
-    .padding(.leading, 12)
-    .padding(.trailing, canClose ? 6 : 12)
-    .padding(.top, 7)
-    .padding(.bottom, 6)
+    .frame(height: 24)
+    .padding(.leading, 10)
+    .padding(.trailing, canClose ? 7 : 10)
     .foregroundStyle(isSelected ? .primary : .secondary)
     .background {
-      TerminalTabShape(cornerRadius: 8)
-        .fill(isSelected ? Color(nsColor: .windowBackgroundColor) : Color.primary.opacity(0.045))
+      Rectangle()
+        .fill(isSelected ? Color.primary.opacity(0.12) : Color.clear)
     }
-    .overlay {
-      TerminalTabShape(cornerRadius: 8)
-        .stroke(isSelected ? Color.primary.opacity(0.18) : Color.primary.opacity(0.08), lineWidth: 1)
+    .overlay(alignment: .trailing) {
+      Rectangle()
+        .fill(Color.primary.opacity(0.14))
+        .frame(width: 1)
     }
     .overlay(alignment: .bottom) {
       if isSelected {
         Rectangle()
-          .fill(Color(nsColor: .windowBackgroundColor))
-          .frame(height: 1)
+          .fill(Color.accentColor.opacity(0.75))
+          .frame(height: 2)
       }
     }
-    .contentShape(TerminalTabShape(cornerRadius: 8))
+    .contentShape(Rectangle())
     .help(displayName)
     .zIndex(isSelected ? 1 : 0)
   }

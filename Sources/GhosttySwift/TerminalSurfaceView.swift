@@ -1,5 +1,13 @@
 import SwiftUI
 
+public typealias TerminalPanelClosePolicy = (TerminalPanel) -> Bool
+public typealias TerminalTabClosePolicy = (TerminalPanel, TerminalTab) -> Bool
+public typealias TerminalPanelActivationHandler = (TerminalPanel) -> Void
+public typealias TerminalTabSelectionHandler = (TerminalPanel, TerminalTab) -> Void
+public typealias TerminalPanelCloseHandler = (TerminalPanel) -> Void
+public typealias TerminalTabCloseHandler = (TerminalPanel, TerminalTab) -> Void
+public typealias TerminalTabOpenHandler = (TerminalPanel) -> Void
+
 @MainActor
 public struct TerminalSurfaceView: View {
   private let session: TerminalSession
@@ -7,31 +15,67 @@ public struct TerminalSurfaceView: View {
   private let showsTabBar: Bool
   private let allowsClosingPanels: Bool
   private let allowsClosingTabs: Bool
+  private let allowsOpeningTabs: Bool
+  private let panelClosePolicy: TerminalPanelClosePolicy?
+  private let tabClosePolicy: TerminalTabClosePolicy?
+  private let onActivatePanel: TerminalPanelActivationHandler?
+  private let onSelectTab: TerminalTabSelectionHandler?
+  private let onClosePanel: TerminalPanelCloseHandler?
+  private let onCloseTab: TerminalTabCloseHandler?
+  private let onOpenTab: TerminalTabOpenHandler?
 
   public init(
     session: TerminalSession,
     showsPaneLabels: Bool = false,
     showsTabBar: Bool = true,
     allowsClosingPanels: Bool = true,
-    allowsClosingTabs: Bool = true
+    allowsClosingTabs: Bool = true,
+    allowsOpeningTabs: Bool = true,
+    panelClosePolicy: TerminalPanelClosePolicy? = nil,
+    tabClosePolicy: TerminalTabClosePolicy? = nil,
+    onActivatePanel: TerminalPanelActivationHandler? = nil,
+    onSelectTab: TerminalTabSelectionHandler? = nil,
+    onClosePanel: TerminalPanelCloseHandler? = nil,
+    onCloseTab: TerminalTabCloseHandler? = nil,
+    onOpenTab: TerminalTabOpenHandler? = nil
   ) {
     self.session = session
     self.showsPaneLabels = showsPaneLabels
     self.showsTabBar = showsTabBar
     self.allowsClosingPanels = allowsClosingPanels
     self.allowsClosingTabs = allowsClosingTabs
+    self.allowsOpeningTabs = allowsOpeningTabs
+    self.panelClosePolicy = panelClosePolicy
+    self.tabClosePolicy = tabClosePolicy
+    self.onActivatePanel = onActivatePanel
+    self.onSelectTab = onSelectTab
+    self.onClosePanel = onClosePanel
+    self.onCloseTab = onCloseTab
+    self.onOpenTab = onOpenTab
   }
 
   public var body: some View {
-    if let splitLayout = session.splitLayout, session.visiblePanels.count > 1 {
-      layoutView(for: splitLayout.root)
-    } else if let panel = session.visiblePanels.first {
-      paneView(for: panel)
-    } else {
+    if session.visiblePanels.isEmpty {
       Text("No terminal available")
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      // Always route through splitView so the body doesn't flip subtrees when a pane
+      // is added/removed; that flip reparents the primary GhosttySurfaceView and
+      // causes a brief resize-flicker on Cmd+D.
+      let (axis, children) = unifiedSplitNodes()
+      splitView(axis: axis, children: children)
     }
+  }
+
+  private func unifiedSplitNodes() -> (TerminalSplitAxis, [TerminalSplitLayout.Node]) {
+    if let splitLayout = session.splitLayout {
+      if case .split(let axis, let children) = splitLayout.root {
+        return (axis, children)
+      }
+      return (splitLayout.axis, [splitLayout.root])
+    }
+    return (.horizontal, [.panel(session.primaryPanelID)])
   }
 
   private func layoutView(for node: TerminalSplitLayout.Node) -> AnyView {
@@ -99,35 +143,82 @@ public struct TerminalSurfaceView: View {
   }
 
   private func paneView(for panel: TerminalPanel) -> some View {
-    TerminalSurfacePaneView(
+    let isPanelClosable = canClosePanel(panel)
+    return TerminalSurfacePaneView(
       panel: panel,
       isActive: panel.id == session.activePanelID && session.visiblePanels.count > 1,
       showsPaneLabel: showsPaneLabels,
-      showsTabBar: showsTabBar && (panel.tabs.count > 1 || session.visiblePanels.count > 1),
-      canClosePanel: canClosePanel(panel),
+      showsTabBar: showsTabBar && (panel.tabs.count > 1 || isPanelClosable),
+      canClosePanel: isPanelClosable,
       canCloseTab: { tab in canCloseTab(tab, in: panel) },
-      onActivate: { session.focusPanel(panel.id) },
+      canOpenTab: allowsOpeningTabs,
+      onActivate: { activatePanel(panel) },
       onClosePanel: { closePanel(panel) },
-      onSelectTab: { tab in session.selectTab(tab.id, in: panel.id) },
-      onCloseTab: { tab in session.closeTab(tab.id, in: panel.id) }
+      onSelectTab: { tab in selectTab(tab, in: panel) },
+      onCloseTab: { tab in closeTab(tab, in: panel) },
+      onOpenTab: { openTab(in: panel) }
     )
   }
 
   private func canClosePanel(_ panel: TerminalPanel) -> Bool {
-    allowsClosingPanels && panel.id != session.primaryPanelID
+    guard allowsClosingPanels && panel.id != session.primaryPanelID else {
+      return false
+    }
+
+    return panelClosePolicy?(panel) ?? true
   }
 
   private func canCloseTab(
     _ tab: TerminalTab,
     in panel: TerminalPanel
   ) -> Bool {
-    allowsClosingTabs && TerminalPanel.canCloseTab(
+    guard allowsClosingTabs && TerminalPanel.canCloseTab(
       panelRole: panel.role,
       tabCount: panel.tabs.count
-    )
+    ) else {
+      return false
+    }
+
+    return tabClosePolicy?(panel, tab) ?? true
+  }
+
+  private func activatePanel(_ panel: TerminalPanel) {
+    if let onActivatePanel {
+      onActivatePanel(panel)
+    } else {
+      _ = session.focusPanel(panel.id)
+    }
+  }
+
+  private func selectTab(_ tab: TerminalTab, in panel: TerminalPanel) {
+    if let onSelectTab {
+      onSelectTab(panel, tab)
+    } else {
+      _ = session.selectTab(tab.id, in: panel.id)
+    }
   }
 
   private func closePanel(_ panel: TerminalPanel) {
-    _ = session.closePanel(panel.id)
+    if let onClosePanel {
+      onClosePanel(panel)
+    } else {
+      _ = session.closePanel(panel.id)
+    }
+  }
+
+  private func closeTab(_ tab: TerminalTab, in panel: TerminalPanel) {
+    if let onCloseTab {
+      onCloseTab(panel, tab)
+    } else {
+      _ = session.closeTab(tab.id, in: panel.id)
+    }
+  }
+
+  private func openTab(in panel: TerminalPanel) {
+    if let onOpenTab {
+      onOpenTab(panel)
+    } else {
+      _ = try? session.openTab(in: panel.id)
+    }
   }
 }

@@ -1,4 +1,4 @@
-public enum TerminalTabNavigationDirection: Sendable {
+public enum TerminalTabNavigationDirection: Equatable, Sendable {
   case previous
   case next
 }

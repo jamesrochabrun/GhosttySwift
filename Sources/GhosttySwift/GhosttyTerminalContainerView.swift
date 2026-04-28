@@ -15,6 +15,8 @@ public final class GhosttyTerminalContainerView: NSView {
   private let childExitHostingView: NSHostingView<GhosttyTerminalChildExitBannerHostView>
   private var localKeyMonitor: Any?
 
+  public override var isOpaque: Bool { false }
+
   public init(controller: GhosttyTerminalController) throws {
     self.controller = controller
     self.bridge = controller.bridge
@@ -36,6 +38,14 @@ public final class GhosttyTerminalContainerView: NSView {
       rootView: GhosttyTerminalChildExitBannerHostView(model: overlayModel)
     )
     super.init(frame: .zero)
+
+    wantsLayer = true
+    layerContentsRedrawPolicy = .never
+    layerContentsPlacement = .topLeft
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.isOpaque = false
+    layer?.contentsGravity = .topLeft
+    layer?.actions = GhosttyLayerActions.disabled
 
     addSubview(scrollView)
     addSubview(searchOverlayHostingView)
@@ -104,6 +114,13 @@ public final class GhosttyTerminalContainerView: NSView {
 
   public func focusTerminal() {
     surfaceView.claimFirstResponder()
+  }
+
+  public func prepareForHostResize(to size: CGSize) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    scrollView.prepareForHostResize(to: size)
+    CATransaction.commit()
   }
 
   private func updateLocalKeyMonitor() {

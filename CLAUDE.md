@@ -25,6 +25,9 @@ single-terminal views, session-based panes/tabs, and a sample host app on top.
 - `GhosttySurfaceConfiguration` is not a full Ghostty config replacement. It is
   only for per-surface host overrides such as working directory, command,
   initial input, and font size.
+- For embedded resize work, preserve the safety rules in `AGENTS.md`: keep
+  AppKit layer size and Ghostty surface size aligned, disable implicit layer
+  actions, and do not forward zero or sub-minimum transient sizes.
 
 ## Embedding Quick Reference
 

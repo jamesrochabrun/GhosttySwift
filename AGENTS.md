@@ -95,6 +95,13 @@ map their shortcuts to public session/controller APIs:
 The sample app uses an exact AppKit local key monitor because SwiftUI shortcut
 matching can collapse shifted arrow shortcuts into unshifted commands.
 
+## Embedded Resize Safety
+
+`GhosttySurfaceView` is IOSurface-backed, so resize code must keep AppKit layer
+dimensions and `ghostty_surface_set_size` in lockstep. Disable implicit layer
+actions during resize and skip zero or sub-minimum transient sizes; otherwise
+Core Animation can stretch stale frames and Ghostty can receive invalid grids.
+
 ## Development Rules
 
 - Treat upstream Ghostty and `GhosttyKit` as the source of terminal behavior.

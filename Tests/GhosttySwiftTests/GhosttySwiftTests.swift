@@ -8,8 +8,11 @@ func surfaceConfigurationDefaultsAreEmpty() {
 
   #expect(configuration.workingDirectory == nil)
   #expect(configuration.command == nil)
+  #expect(configuration.environment.isEmpty)
   #expect(configuration.initialInput == nil)
   #expect(configuration.fontSize == 0)
+  #expect(configuration.initialScaleFactor == nil)
+  #expect(configuration.initialSize == nil)
 }
 
 @MainActor
@@ -35,7 +38,76 @@ func terminalViewCanBeConstructedFromController() throws {
   let view = GhosttyTerminalView(controller: controller)
 
   #expect(controller.title == "Ghostty")
+  #expect(controller.foregroundProcessID == nil)
   #expect(String(describing: type(of: view)).contains("GhosttyTerminalView"))
+}
+
+@MainActor
+@Test
+func terminalSurfaceViewAcceptsHostClosePolicy() throws {
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    )
+  )
+  let view = TerminalSurfaceView(
+    session: session,
+    panelClosePolicy: { _ in false },
+    tabClosePolicy: { _, _ in false },
+    onClosePanel: { _ in },
+    onCloseTab: { _, _ in }
+  )
+  let controller = try #require(session.primaryPanel.activeTab?.controller)
+
+  #expect(controller.closesHostWindowOnClose)
+  controller.closesHostWindowOnClose = false
+
+  #expect(String(describing: type(of: view)).contains("TerminalSurfaceView"))
+  #expect(!controller.closesHostWindowOnClose)
+}
+
+@MainActor
+@Test
+func controllerPublicInputMethodsAreSafeBeforeSurfaceAttachment() throws {
+  let controller = try GhosttyTerminalController(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      environment: ["TERM_PROGRAM": "AgentHub"]
+    )
+  )
+
+  controller.sendText("hello")
+  controller.sendBytes(Array("world".utf8))
+  controller.sendReturnKey()
+  controller.sendArrowDownKey()
+  #expect(!controller.startSearch())
+  controller.requestClose()
+
+  #expect(controller.configuration.environment["TERM_PROGRAM"] == "AgentHub")
+}
+
+@MainActor
+@Test
+func bridgeOpenURLActionDelegatesToCallback() {
+  let bridge = GhosttySurfaceBridge()
+  var openedURL: String?
+  bridge.onOpenURL = { url in
+    openedURL = url
+    return true
+  }
+
+  "https://agenthub.local".withCString { pointer in
+    var action = ghostty_action_s()
+    action.tag = GHOSTTY_ACTION_OPEN_URL
+    action.action.open_url = ghostty_action_open_url_s(
+      kind: GHOSTTY_ACTION_OPEN_URL_KIND_UNKNOWN,
+      url: pointer,
+      len: UInt("https://agenthub.local".utf8.count)
+    )
+    #expect(bridge.handleAction(action))
+  }
+
+  #expect(openedURL == "https://agenthub.local")
 }
 
 @Test
@@ -451,6 +523,76 @@ func tabClosePolicyProtectsPrimaryPanelLastTab() {
   #expect(!TerminalPanel.canCloseTab(panelRole: .primary, tabCount: 1))
   #expect(TerminalPanel.canCloseTab(panelRole: .primary, tabCount: 2))
   #expect(TerminalPanel.canCloseTab(panelRole: .auxiliary, tabCount: 1))
+}
+
+@MainActor
+@Test
+func sessionRequestCloseAllIsSafeBeforeSurfaceAttachment() throws {
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    )
+  )
+  _ = try session.openTab(configuration: GhosttySurfaceConfiguration(workingDirectory: "/tmp"))
+  _ = try session.openPanel(configuration: GhosttySurfaceConfiguration(workingDirectory: "/tmp"))
+
+  session.requestCloseAll()
+
+  #expect(session.panels.count == 2)
+  #expect(session.primaryPanel.tabs.count == 2)
+  #expect(session.auxiliaryPanels.first?.tabs.count == 1)
+}
+
+@MainActor
+@Test
+func openPanelPreservesExplicitInitialScaleFactor() throws {
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    )
+  )
+
+  let panel = try session.openPanel(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      initialScaleFactor: 1.25
+    )
+  )
+
+  #expect(panel.activeTab?.controller.configuration.initialScaleFactor == 1.25)
+}
+
+@Test
+func panelConfigurationSeedsInitialScaleFactorFromActiveWindow() {
+  let configuration = TerminalSession.resolvedPanelConfiguration(
+    configuration: nil,
+    defaultConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      fontSize: 13
+    ),
+    activeWindowScaleFactor: 1.5
+  )
+
+  #expect(configuration.workingDirectory == "/tmp")
+  #expect(configuration.fontSize == 13)
+  #expect(configuration.initialScaleFactor == 1.5)
+}
+
+@Test
+func panelConfigurationDoesNotOverrideExplicitInitialScaleFactor() {
+  let configuration = TerminalSession.resolvedPanelConfiguration(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      initialScaleFactor: 2
+    ),
+    defaultConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/fallback"
+    ),
+    activeWindowScaleFactor: 1
+  )
+
+  #expect(configuration.workingDirectory == "/tmp")
+  #expect(configuration.initialScaleFactor == 2)
 }
 
 @Test
