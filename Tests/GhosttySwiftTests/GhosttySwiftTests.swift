@@ -11,6 +11,8 @@ func surfaceConfigurationDefaultsAreEmpty() {
   #expect(configuration.environment.isEmpty)
   #expect(configuration.initialInput == nil)
   #expect(configuration.fontSize == 0)
+  #expect(configuration.initialScaleFactor == nil)
+  #expect(configuration.initialSize == nil)
 }
 
 @MainActor
@@ -539,6 +541,58 @@ func sessionRequestCloseAllIsSafeBeforeSurfaceAttachment() throws {
   #expect(session.panels.count == 2)
   #expect(session.primaryPanel.tabs.count == 2)
   #expect(session.auxiliaryPanels.first?.tabs.count == 1)
+}
+
+@MainActor
+@Test
+func openPanelPreservesExplicitInitialScaleFactor() throws {
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp"
+    )
+  )
+
+  let panel = try session.openPanel(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      initialScaleFactor: 1.25
+    )
+  )
+
+  #expect(panel.activeTab?.controller.configuration.initialScaleFactor == 1.25)
+}
+
+@Test
+func panelConfigurationSeedsInitialScaleFactorFromActiveWindow() {
+  let configuration = TerminalSession.resolvedPanelConfiguration(
+    configuration: nil,
+    defaultConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      fontSize: 13
+    ),
+    activeWindowScaleFactor: 1.5
+  )
+
+  #expect(configuration.workingDirectory == "/tmp")
+  #expect(configuration.fontSize == 13)
+  #expect(configuration.initialScaleFactor == 1.5)
+}
+
+@Test
+func panelConfigurationDoesNotOverrideExplicitInitialScaleFactor() {
+  let configuration = TerminalSession.resolvedPanelConfiguration(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      initialScaleFactor: 2
+    ),
+    defaultConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/fallback"
+    ),
+    activeWindowScaleFactor: 1
+  )
+
+  #expect(configuration.workingDirectory == "/tmp")
+  #expect(configuration.initialScaleFactor == 2)
 }
 
 @Test

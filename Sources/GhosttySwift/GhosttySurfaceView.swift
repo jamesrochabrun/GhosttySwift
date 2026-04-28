@@ -28,6 +28,8 @@ public final class GhosttySurfaceView: NSView {
   private var contentSizeBacking: NSSize?
   private var isObservingWindowNotifications = false
   private var titleChangeTimer: Timer?
+  private var lastSentSurfaceSize: (width: UInt32, height: UInt32)?
+  private var createdScaleFactor: CGFloat?
   var markedText = NSMutableAttributedString()
   var keyTextAccumulator: [String]?
 
@@ -48,11 +50,25 @@ public final class GhosttySurfaceView: NSView {
     self.runtime = runtime
     self.configuration = configuration
     self.bridge = bridge
-    super.init(frame: .zero)
+
+    let initialFrame = configuration.initialSize.flatMap { size -> NSRect? in
+      guard size.width > 0, size.height > 0 else { return nil }
+      return NSRect(x: 0, y: 0, width: size.width, height: size.height)
+    } ?? .zero
+    super.init(frame: initialFrame)
+    if initialFrame.size != .zero {
+      contentSizeBacking = initialFrame.size
+    }
 
     wantsLayer = true
+    // Ghostty drives its own Metal rendering, so AppKit should not interpolate or
+    // implicitly animate layer contents while pane sizes are changing.
+    layerContentsRedrawPolicy = .never
+    layerContentsPlacement = .topLeft
     layer?.backgroundColor = NSColor.clear.cgColor
     layer?.isOpaque = false
+    layer?.contentsGravity = .topLeft
+    layer?.actions = GhosttyLayerActions.disabled
 
     bridge.attach(to: self)
     bridge.internalOnClose = { [weak self] _ in
@@ -90,8 +106,8 @@ public final class GhosttySurfaceView: NSView {
   public override func layout() {
     super.layout()
     contentSize = bounds.size
-    let scaledSize = convertToBacking(contentSize)
-    setSurfaceSize(width: UInt32(scaledSize.width), height: UInt32(scaledSize.height))
+    let scaledSize = backingPixelSize(for: contentSize)
+    setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
     syncFocus()
   }
 
@@ -101,12 +117,21 @@ public final class GhosttySurfaceView: NSView {
     installTrackingAreaIfNeeded()
     installWindowObservers()
     updateDisplayID()
+    configureSublayersForCleanResize()
     updateSurfaceMetrics()
     claimFirstResponder()
   }
 
+  func prepareForHostResize(to size: CGSize) {
+    guard size.width > 0, size.height > 0 else { return }
+    contentSize = NSSize(width: size.width, height: size.height)
+    let scaledSize = backingPixelSize(for: size)
+    setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+  }
+
   public override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
+    configureSublayersForCleanResize()
     updateSurfaceMetrics()
   }
 
@@ -197,7 +222,15 @@ public final class GhosttySurfaceView: NSView {
 
   private func createSurface() throws {
     GhosttyTrace.write("surface view createSurface start")
-    let initialScale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+    // Prefer the caller-provided scale (e.g. an existing pane's window scale) so the new
+    // surface starts at the right scale and ghostty doesn't have to rebuild the font atlas
+    // and re-render after viewDidMoveToWindow flips from a screen guess to the window scale.
+    let initialScale = configuration.initialScaleFactor
+      ?? window?.backingScaleFactor
+      ?? NSScreen.main?.backingScaleFactor
+      ?? 2.0
+    let initialScaleCGFloat = CGFloat(initialScale)
+    createdScaleFactor = initialScaleCGFloat
 
     let surface = withSurfaceConfig(scaleFactor: initialScale) { config in
       ghostty_surface_new(runtime.appHandle, &config)
@@ -210,7 +243,25 @@ public final class GhosttySurfaceView: NSView {
 
     self.surfaceHandle = surface
     GhosttyTrace.write("surface view createSurface success")
+    configureSublayersForCleanResize()
+    if let initialSize = configuration.initialSize,
+       initialSize.width > 0,
+       initialSize.height > 0 {
+      let scaledSize = Self.pixelSize(for: initialSize, scale: initialScaleCGFloat)
+      setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
+    }
     updateSurfaceMetrics()
+  }
+
+  private func configureSublayersForCleanResize() {
+    func configure(_ target: CALayer) {
+      target.actions = GhosttyLayerActions.disabled
+      target.contentsGravity = .topLeft
+      for sublayer in target.sublayers ?? [] {
+        configure(sublayer)
+      }
+    }
+    if let layer { configure(layer) }
   }
 
   private func withSurfaceConfig<T>(
@@ -299,19 +350,77 @@ public final class GhosttySurfaceView: NSView {
       CATransaction.commit()
     }
 
-    let framebufferFrame = convertToBacking(frame)
-    let xScale = frame.width > 0 ? framebufferFrame.width / frame.width : 1
-    let yScale = frame.height > 0 ? framebufferFrame.height / frame.height : 1
+    let scale = contentScaleForSurface()
 
-    ghostty_surface_set_content_scale(surfaceHandle, xScale, yScale)
-    let scaledSize = convertToBacking(contentSize)
-    setSurfaceSize(width: UInt32(scaledSize.width), height: UInt32(scaledSize.height))
+    ghostty_surface_set_content_scale(surfaceHandle, scale.x, scale.y)
+    let scaledSize = backingPixelSize(for: contentSize)
+    setSurfaceSize(width: scaledSize.width, height: scaledSize.height)
 
     syncFocus()
   }
 
+  private func backingPixelSize(for size: CGSize) -> (width: UInt32, height: UInt32) {
+    if window == nil, let scale = createdScaleFactor {
+      return Self.pixelSize(
+        width: size.width,
+        height: size.height,
+        scale: scale
+      )
+    }
+
+    let backingSize = convertToBacking(NSRect(origin: .zero, size: size)).size
+    return (
+      width: Self.pixelDimension(backingSize.width),
+      height: Self.pixelDimension(backingSize.height)
+    )
+  }
+
+  private func contentScaleForSurface() -> (x: CGFloat, y: CGFloat) {
+    if let window {
+      return (window.backingScaleFactor, window.backingScaleFactor)
+    }
+
+    if let createdScaleFactor {
+      return (createdScaleFactor, createdScaleFactor)
+    }
+
+    let localUnit = NSRect(x: 0, y: 0, width: 1, height: 1)
+    let backingUnit = convertToBacking(localUnit)
+    return (
+      x: backingUnit.width > 0 ? backingUnit.width : 1,
+      y: backingUnit.height > 0 ? backingUnit.height : 1
+    )
+  }
+
+  private static func pixelSize(
+    for size: GhosttySurfaceInitialSize,
+    scale: CGFloat
+  ) -> (width: UInt32, height: UInt32) {
+    pixelSize(width: CGFloat(size.width), height: CGFloat(size.height), scale: scale)
+  }
+
+  private static func pixelSize(
+    width: CGFloat,
+    height: CGFloat,
+    scale: CGFloat
+  ) -> (width: UInt32, height: UInt32) {
+    (width: pixelDimension(width * scale), height: pixelDimension(height * scale))
+  }
+
+  private static func pixelDimension(_ value: CGFloat) -> UInt32 {
+    UInt32(max(1, value.rounded(.toNearestOrAwayFromZero)))
+  }
+
   private func setSurfaceSize(width: UInt32, height: UInt32) {
     guard let surfaceHandle else { return }
+    // Drop 0x0 calls: the surface has no real frame yet (pre-layout), and forwarding
+    // them produces "very small terminal grid" warnings, redundant io_thread resizes,
+    // and an early renderer pass that the IOSurfaceLayer later discards.
+    guard width > 0, height > 0 else { return }
+    if let last = lastSentSurfaceSize, last.width == width, last.height == height {
+      return
+    }
+    lastSentSurfaceSize = (width, height)
     ghostty_surface_set_size(surfaceHandle, width, height)
   }
 
@@ -463,8 +572,12 @@ final class GhosttySurfaceScrollView: NSView {
     super.init(frame: .zero)
 
     wantsLayer = true
+    layerContentsRedrawPolicy = .never
+    layerContentsPlacement = .topLeft
     layer?.backgroundColor = NSColor.clear.cgColor
     layer?.isOpaque = false
+    layer?.contentsGravity = .topLeft
+    layer?.actions = GhosttyLayerActions.disabled
 
     scrollView.hasVerticalScroller = false
     scrollView.hasHorizontalScroller = false
@@ -476,8 +589,12 @@ final class GhosttySurfaceScrollView: NSView {
 
     documentView.frame = .zero
     documentView.wantsLayer = true
+    documentView.layerContentsRedrawPolicy = .never
+    documentView.layerContentsPlacement = .topLeft
     documentView.layer?.backgroundColor = NSColor.clear.cgColor
     documentView.layer?.isOpaque = false
+    documentView.layer?.contentsGravity = .topLeft
+    documentView.layer?.actions = GhosttyLayerActions.disabled
     scrollView.documentView = documentView
     documentView.addSubview(surfaceView)
 
@@ -558,6 +675,10 @@ final class GhosttySurfaceScrollView: NSView {
   func syncFromController() {
     synchronizeAppearance()
     synchronizeScrollView()
+  }
+
+  func prepareForHostResize(to size: CGSize) {
+    surfaceView.prepareForHostResize(to: size)
   }
 
   private func synchronizeAppearance() {

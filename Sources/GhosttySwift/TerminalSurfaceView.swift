@@ -55,15 +55,27 @@ public struct TerminalSurfaceView: View {
   }
 
   public var body: some View {
-    if let splitLayout = session.splitLayout, session.visiblePanels.count > 1 {
-      layoutView(for: splitLayout.root)
-    } else if let panel = session.visiblePanels.first {
-      paneView(for: panel)
-    } else {
+    if session.visiblePanels.isEmpty {
       Text("No terminal available")
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    } else {
+      // Always route through splitView so the body doesn't flip subtrees when a pane
+      // is added/removed; that flip reparents the primary GhosttySurfaceView and
+      // causes a brief resize-flicker on Cmd+D.
+      let (axis, children) = unifiedSplitNodes()
+      splitView(axis: axis, children: children)
     }
+  }
+
+  private func unifiedSplitNodes() -> (TerminalSplitAxis, [TerminalSplitLayout.Node]) {
+    if let splitLayout = session.splitLayout {
+      if case .split(let axis, let children) = splitLayout.root {
+        return (axis, children)
+      }
+      return (splitLayout.axis, [splitLayout.root])
+    }
+    return (.horizontal, [.panel(session.primaryPanelID)])
   }
 
   private func layoutView(for node: TerminalSplitLayout.Node) -> AnyView {

@@ -74,10 +74,21 @@ public final class TerminalSession {
     configuration: GhosttySurfaceConfiguration? = nil,
     axis: TerminalSplitAxis = .horizontal
   ) throws -> TerminalPanel {
+    let activeWindowScaleFactor: Double?
+    if let scale = activePanel.activeTab?.controller.bridge.surfaceView?.window?.backingScaleFactor {
+      activeWindowScaleFactor = Double(scale)
+    } else {
+      activeWindowScaleFactor = nil
+    }
+    let resolvedConfiguration = Self.resolvedPanelConfiguration(
+      configuration: configuration,
+      defaultConfiguration: defaultPanelConfiguration,
+      activeWindowScaleFactor: activeWindowScaleFactor
+    )
     let tab = try TerminalSession.makeTab(
       runtime: runtime,
       name: name,
-      configuration: configuration ?? defaultPanelConfiguration
+      configuration: resolvedConfiguration
     )
     let panel = TerminalPanel(
       role: .auxiliary,
@@ -371,6 +382,19 @@ public final class TerminalSession {
       guard nextIndex < tabIDs.endIndex else { return nil }
       return tabIDs[nextIndex]
     }
+  }
+
+  nonisolated static func resolvedPanelConfiguration(
+    configuration: GhosttySurfaceConfiguration?,
+    defaultConfiguration: GhosttySurfaceConfiguration,
+    activeWindowScaleFactor: Double?
+  ) -> GhosttySurfaceConfiguration {
+    var resolvedConfiguration = configuration ?? defaultConfiguration
+    if resolvedConfiguration.initialScaleFactor == nil,
+       let activeWindowScaleFactor {
+      resolvedConfiguration.initialScaleFactor = activeWindowScaleFactor
+    }
+    return resolvedConfiguration
   }
 
   private nonisolated static func twoPanePanelID(
