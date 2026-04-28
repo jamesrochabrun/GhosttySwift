@@ -1,0 +1,123 @@
+name: Release GhosttySwift
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, for example 1.0.4"
+        required: true
+        type: string
+      binary_source:
+        description: "Where GhosttyKit.xcframework.zip comes from"
+        required: true
+        default: carry-forward
+        type: choice
+        options:
+          - carry-forward
+          - build
+      source_release:
+        description: "Existing release to carry forward from; use latest for the newest stable release"
+        required: false
+        default: latest
+        type: string
+      target_branch:
+        description: "Branch that receives the Package.swift release commit"
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-ghosttyswift-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Create binary release
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate version is unused
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git rev-parse "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists." >&2
+            exit 1
+          fi
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists." >&2
+            exit 1
+          fi
+
+      - name: Setup mise for Ghostty build
+        if: ${{ inputs.binary_source == 'build' }}
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+
+      - name: Prepare carry-forward binary release
+        if: ${{ inputs.binary_source == 'carry-forward' }}
+        id: prepare-carry-forward
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Scripts/prepare-binary-release.sh \
+            --version "${{ inputs.version }}" \
+            --source-release "${{ inputs.source_release || 'latest' }}"
+
+      - name: Prepare built binary release
+        if: ${{ inputs.binary_source == 'build' }}
+        id: prepare-build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Scripts/prepare-binary-release.sh \
+            --version "${{ inputs.version }}" \
+            --build
+
+      - name: Commit release manifest
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git add Package.swift
+          git commit -m "Release GhosttySwift $VERSION"
+
+      - name: Tag release commit
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git tag "$VERSION"
+
+      - name: Push release commit and tag
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          git push origin "HEAD:$TARGET_BRANCH"
+          git push origin "$VERSION"
+
+      - name: Create GitHub release with binary asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          ZIP_PATH=".build/release-artifacts/$VERSION/GhosttyKit.xcframework.zip"
+          gh release create "$VERSION" \
+            "$ZIP_PATH#GhosttyKit.xcframework.zip" \
+            --title "$VERSION" \
+            --notes "GhosttySwift $VERSION binary release. SwiftPM downloads GhosttyKit.xcframework.zip from this release and verifies the checksum recorded in Package.swift."
