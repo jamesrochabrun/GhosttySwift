@@ -77,6 +77,29 @@ struct ContentView: View {
 If you need to share one runtime across multiple surfaces, create a
 `GhosttyRuntime` yourself and pass it into `GhosttyTerminalView(runtime:...)`.
 
+## Clipboard Confirmations
+
+Ghostty may ask the embedder to confirm clipboard-sensitive actions such as an
+unsafe paste, OSC 52 clipboard read, or OSC 52 clipboard write. GhosttySwift
+defaults to denying those requests unless the host provides a confirmation
+handler:
+
+```swift
+let controller = try GhosttyTerminalController(
+  configuration: GhosttySurfaceConfiguration(
+    workingDirectory: projectPath
+  )
+)
+
+controller.onClipboardConfirmation = { confirmation in
+  // Present `confirmation.contents` to the user before allowing.
+  return .deny
+}
+```
+
+Returning `.deny` keeps the host clipboard unchanged for writes and sends empty
+clipboard contents back to Ghostty for read or paste requests.
+
 ## Ghostty Configuration
 
 GhosttySwift can load a regular Ghostty config file by passing `configPath`

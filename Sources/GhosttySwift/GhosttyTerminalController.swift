@@ -23,6 +23,10 @@ public final class GhosttyTerminalController {
   public var onCloseWindow: (() -> Void)?
   public var onDesktopNotification: ((GhosttySurfaceDesktopNotification) -> Void)?
   public var onOpenURL: ((String) -> Bool)?
+  public var onClipboardConfirmation: GhosttyClipboardConfirmationHandler? {
+    get { bridge.onClipboardConfirmation }
+    set { bridge.onClipboardConfirmation = newValue }
+  }
 
   var internalOnStateChange: ((GhosttyTerminalController) -> Void)?
 
