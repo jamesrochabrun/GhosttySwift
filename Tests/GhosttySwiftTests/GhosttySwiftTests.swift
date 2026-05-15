@@ -110,6 +110,43 @@ func bridgeOpenURLActionDelegatesToCallback() {
   #expect(openedURL == "https://agenthub.local")
 }
 
+@MainActor
+@Test
+func bridgeDeniesClipboardConfirmationWithoutHostHandler() async {
+  let bridge = GhosttySurfaceBridge()
+  let confirmation = GhosttyClipboardConfirmation(
+    request: .osc52Read,
+    location: nil,
+    contents: "secret"
+  )
+
+  let decision = await bridge.confirmClipboardRequest(confirmation)
+
+  #expect(decision == .deny)
+}
+
+@MainActor
+@Test
+func controllerForwardsClipboardConfirmationToBridgeHandler() async throws {
+  let controller = try GhosttyTerminalController(
+    configuration: GhosttySurfaceConfiguration(workingDirectory: "/tmp")
+  )
+  let confirmation = GhosttyClipboardConfirmation(
+    request: .paste,
+    location: .standard,
+    contents: "echo hello"
+  )
+
+  controller.onClipboardConfirmation = { request in
+    #expect(request == confirmation)
+    return .allow
+  }
+
+  let decision = await controller.bridge.confirmClipboardRequest(confirmation)
+
+  #expect(decision == .allow)
+}
+
 @Test
 func childExitBannerFormatsSuccessAndFailure() {
   let success = GhosttyTerminalOverlayModel.makeChildExitBanner(

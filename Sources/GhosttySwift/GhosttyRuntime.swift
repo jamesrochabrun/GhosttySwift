@@ -408,7 +408,7 @@ private func ghosttyRuntimeWriteClipboard(
   _ contentCount: Int,
   _ shouldConfirm: Bool
 ) {
-  _ = userdata
+  let userdataBits = userdata.map { UInt(bitPattern: $0) }
   guard let content, contentCount > 0 else { return }
 
   let items: [(mime: String, data: String)] = (0..<contentCount).compactMap { index in
@@ -421,14 +421,24 @@ private func ghosttyRuntimeWriteClipboard(
 
   if Thread.isMainThread {
     MainActor.assumeIsolated {
-      writeClipboard(location: location, items: items, shouldConfirm: shouldConfirm)
+      writeClipboard(
+        userdataBits: userdataBits,
+        location: location,
+        items: items,
+        shouldConfirm: shouldConfirm
+      )
     }
     return
   }
 
   DispatchQueue.main.async {
     MainActor.assumeIsolated {
-      writeClipboard(location: location, items: items, shouldConfirm: shouldConfirm)
+      writeClipboard(
+        userdataBits: userdataBits,
+        location: location,
+        items: items,
+        shouldConfirm: shouldConfirm
+      )
     }
   }
 }
@@ -471,31 +481,93 @@ private func completeConfirmedClipboardRead(
   requestBits: UInt?,
   requestType: ghostty_clipboard_request_e
 ) {
-  _ = requestType
-
   let userdata = userdataBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
-  let request = requestBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
 
   guard
     let bridge = GhosttyRuntime.bridge(from: userdata),
-    let surface = bridge.surfaceView?.surfaceHandle
+    bridge.surfaceView?.surfaceHandle != nil
   else {
     return
   }
 
-  value.withCString { pointer in
-    ghostty_surface_complete_clipboard_request(surface, pointer, request, true)
+  guard let requestKind = GhosttyClipboardRequest(requestType) else {
+    Task { @MainActor in
+      let request = requestBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
+      guard let surface = bridge.surfaceView?.surfaceHandle else { return }
+
+      "".withCString { pointer in
+        ghostty_surface_complete_clipboard_request(surface, pointer, request, true)
+      }
+    }
+    return
+  }
+
+  let confirmation = GhosttyClipboardConfirmation(
+    request: requestKind,
+    location: nil,
+    contents: value
+  )
+
+  Task { @MainActor in
+    let decision = await bridge.confirmClipboardRequest(confirmation)
+    let confirmedValue = decision == .allow ? value : ""
+    let request = requestBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
+
+    guard let surface = bridge.surfaceView?.surfaceHandle else {
+      return
+    }
+
+    confirmedValue.withCString { pointer in
+      ghostty_surface_complete_clipboard_request(surface, pointer, request, true)
+    }
   }
 }
 
 @MainActor
 private func writeClipboard(
+  userdataBits: UInt?,
   location: ghostty_clipboard_e,
   items: [(mime: String, data: String)],
   shouldConfirm: Bool
 ) {
-  _ = shouldConfirm
+  guard shouldConfirm else {
+    writeClipboardItems(location: location, items: items)
+    return
+  }
 
+  let userdata = userdataBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
+
+  guard
+    let bridge = GhosttyRuntime.bridge(from: userdata),
+    let locationKind = GhosttyClipboardLocation(location),
+    let textItem = items.first(where: { $0.mime == "text/plain" })
+  else {
+    return
+  }
+
+  let confirmation = GhosttyClipboardConfirmation(
+    request: .osc52Write,
+    location: locationKind,
+    contents: textItem.data
+  )
+
+  Task { @MainActor in
+    guard await bridge.confirmClipboardRequest(confirmation) == .allow else {
+      return
+    }
+
+    writeClipboardItems(
+      location: location,
+      items: [(mime: textItem.mime, data: textItem.data)]
+    )
+  }
+}
+
+@MainActor
+private func writeClipboardItems(
+  location: ghostty_clipboard_e,
+  items: [(mime: String, data: String)]
+) {
   guard let pasteboard = NSPasteboard.ghostty(location) else { return }
 
   let types = items.compactMap { NSPasteboard.PasteboardType(mimeType: $0.mime) }
