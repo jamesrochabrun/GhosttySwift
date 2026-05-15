@@ -41,6 +41,17 @@ public final class GhosttyRuntime {
     return appHandleStorage
   }
 
+  public static func make(configPath: String? = nil) async throws -> GhosttyRuntime {
+    try configureBundledResources()
+    try ensureGhosttyInitialized()
+
+    guard let loadedConfig = await loadConfigInBackground(configPath: configPath) else {
+      throw RuntimeError.configCreationFailed
+    }
+
+    return try GhosttyRuntime(adoptingFinalizedConfig: loadedConfig.handle)
+  }
+
   public init(configPath: String? = nil) throws {
     self.configHandle = nil
     self.appHandleStorage = nil
@@ -48,6 +59,21 @@ public final class GhosttyRuntime {
     try Self.configureBundledResources()
     try Self.ensureGhosttyInitialized()
 
+    guard let config = Self.loadConfig(configPath: configPath) else {
+      throw RuntimeError.configCreationFailed
+    }
+
+    try initialize(withFinalizedConfig: config)
+  }
+
+  private init(adoptingFinalizedConfig config: ghostty_config_t) throws {
+    self.configHandle = nil
+    self.appHandleStorage = nil
+
+    try initialize(withFinalizedConfig: config)
+  }
+
+  private func initialize(withFinalizedConfig config: ghostty_config_t) throws {
     var runtimeConfig = ghostty_runtime_config_s(
       userdata: Unmanaged.passUnretained(self).toOpaque(),
       supports_selection_clipboard: true,
@@ -69,9 +95,6 @@ public final class GhosttyRuntime {
       }
     )
 
-    guard let config = Self.loadConfig(configPath: configPath) else {
-      throw RuntimeError.configCreationFailed
-    }
     guard let app = ghostty_app_new(&runtimeConfig, config) else {
       ghostty_config_free(config)
       throw RuntimeError.appCreationFailed
@@ -145,7 +168,20 @@ public final class GhosttyRuntime {
     ghostty_app_set_focus(appHandleStorage, false)
   }
 
-  private static func loadConfig(configPath: String?) -> ghostty_config_t? {
+  private struct LoadedConfig: @unchecked Sendable {
+    let handle: ghostty_config_t
+  }
+
+  private nonisolated static func loadConfigInBackground(configPath: String?) async -> LoadedConfig? {
+    await Task.detached(priority: .userInitiated) {
+      guard let config = loadConfig(configPath: configPath) else {
+        return nil
+      }
+      return LoadedConfig(handle: config)
+    }.value
+  }
+
+  private nonisolated static func loadConfig(configPath: String?) -> ghostty_config_t? {
     guard let config = ghostty_config_new() else {
       return nil
     }
