@@ -68,7 +68,6 @@ public final class GhosttySurfaceBridge {
   public var onCloseWindow: (() -> Void)?
   public var onDesktopNotification: ((GhosttySurfaceDesktopNotification) -> Void)?
   public var onOpenURL: ((String) -> Bool)?
-  public var onClipboardConfirmation: GhosttyClipboardConfirmationHandler?
   public var onStateChange: (() -> Void)?
 
   weak var surfaceView: GhosttySurfaceView?
@@ -76,16 +75,6 @@ public final class GhosttySurfaceBridge {
   var internalOnCloseWindow: (() -> Void)?
 
   public init() {}
-
-  func confirmClipboardRequest(
-    _ confirmation: GhosttyClipboardConfirmation
-  ) async -> GhosttyClipboardDecision {
-    guard let onClipboardConfirmation else {
-      return .deny
-    }
-
-    return await onClipboardConfirmation(confirmation)
-  }
 
   func attach(to surfaceView: GhosttySurfaceView) {
     self.surfaceView = surfaceView
