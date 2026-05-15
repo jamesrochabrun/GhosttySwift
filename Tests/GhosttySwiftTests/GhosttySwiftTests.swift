@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import GhosttyKit
 @testable import GhosttySwift
@@ -40,6 +41,19 @@ func terminalViewCanBeConstructedFromController() throws {
   #expect(controller.title == "Ghostty")
   #expect(controller.foregroundProcessID == nil)
   #expect(String(describing: type(of: view)).contains("GhosttyTerminalView"))
+}
+
+@MainActor
+@Test
+func runtimeCanLoadConfigAsynchronously() async throws {
+  let configURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-\(UUID().uuidString).conf")
+  try "font-size = 14\n".write(to: configURL, atomically: true, encoding: .utf8)
+  defer { try? FileManager.default.removeItem(at: configURL) }
+
+  let runtime = try await GhosttyRuntime.make(configPath: configURL.path)
+
+  #expect(String(describing: type(of: runtime)).contains("GhosttyRuntime"))
 }
 
 @MainActor
