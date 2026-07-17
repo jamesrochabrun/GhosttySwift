@@ -127,6 +127,9 @@ func runtimeAppliesAppOverlayBeforeCreatingNewSurface() throws {
   #expect(applied)
   #expect(runtime.configurationOverlayPath == overlayURL.path)
   #expect(controller.colorScheme == .light)
+  #expect(controller.setColorScheme(.dark))
+  #expect(controller.colorScheme == .dark)
+  #expect(!controller.setColorScheme(.dark))
   withExtendedLifetime(container) {}
 }
 
