@@ -193,11 +193,15 @@ public final class GhosttySurfaceView: NSView {
 
   /// Updates Ghostty's conditional theme state and reports the change to
   /// terminal programs that opt into color-scheme notifications.
+  ///
+  /// Focused surfaces also receive a focus refresh so terminal programs that
+  /// re-query OSC 10/11 colors on focus gain can redraw immediately.
   @discardableResult
   public func setColorScheme(_ colorScheme: GhosttyColorScheme) -> Bool {
     guard let surfaceHandle else { return false }
     guard self.colorScheme != colorScheme else { return false }
 
+    let hasFocus = window?.isKeyWindow == true && window?.firstResponder === self
     let nativeScheme: ghostty_color_scheme_e = switch colorScheme {
     case .light:
       GHOSTTY_COLOR_SCHEME_LIGHT
@@ -205,6 +209,10 @@ public final class GhosttySurfaceView: NSView {
       GHOSTTY_COLOR_SCHEME_DARK
     }
     ghostty_surface_set_color_scheme(surfaceHandle, nativeScheme)
+    if hasFocus {
+      ghostty_surface_set_focus(surfaceHandle, false)
+      ghostty_surface_set_focus(surfaceHandle, true)
+    }
     self.colorScheme = colorScheme
     return true
   }
