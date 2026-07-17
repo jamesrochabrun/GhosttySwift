@@ -22,6 +22,7 @@ public final class GhosttySurfaceView: NSView {
   public var activeCursor: NSCursor = .iBeam
   public var closesHostWindowOnClose = true
   public private(set) var configurationOverlayPath: String?
+  public private(set) var colorScheme: GhosttyColorScheme?
 
   private let runtime: GhosttyRuntime
   private let configuration: GhosttySurfaceConfiguration
@@ -53,6 +54,7 @@ public final class GhosttySurfaceView: NSView {
     self.configuration = configuration
     self.bridge = bridge
     self.configurationOverlayPath = configuration.configurationOverlayPath
+    self.colorScheme = nil
 
     let initialFrame = configuration.initialSize.flatMap { size -> NSRect? in
       guard size.width > 0, size.height > 0 else { return nil }
@@ -189,6 +191,24 @@ public final class GhosttySurfaceView: NSView {
     return true
   }
 
+  /// Updates Ghostty's conditional theme state and reports the change to
+  /// terminal programs that opt into color-scheme notifications.
+  @discardableResult
+  public func setColorScheme(_ colorScheme: GhosttyColorScheme) -> Bool {
+    guard let surfaceHandle else { return false }
+    guard self.colorScheme != colorScheme else { return false }
+
+    let nativeScheme: ghostty_color_scheme_e = switch colorScheme {
+    case .light:
+      GHOSTTY_COLOR_SCHEME_LIGHT
+    case .dark:
+      GHOSTTY_COLOR_SCHEME_DARK
+    }
+    ghostty_surface_set_color_scheme(surfaceHandle, nativeScheme)
+    self.colorScheme = colorScheme
+    return true
+  }
+
   private func installWindowObservers() {
     guard !isObservingWindowNotifications else { return }
     let center = NotificationCenter.default
@@ -258,6 +278,9 @@ public final class GhosttySurfaceView: NSView {
     }
 
     self.surfaceHandle = surface
+    if let colorScheme = configuration.colorScheme {
+      _ = setColorScheme(colorScheme)
+    }
     if configuration.fontSize > 0 {
       _ = performBindingAction("set_font_size:\(configuration.fontSize)")
     }

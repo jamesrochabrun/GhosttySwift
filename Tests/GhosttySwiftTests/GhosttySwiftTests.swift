@@ -15,6 +15,7 @@ func surfaceConfigurationDefaultsAreEmpty() {
   #expect(configuration.initialScaleFactor == nil)
   #expect(configuration.initialSize == nil)
   #expect(configuration.configurationOverlayPath == nil)
+  #expect(configuration.colorScheme == nil)
 }
 
 @MainActor
@@ -59,6 +60,78 @@ func runtimeCanLoadConfigAsynchronously() async throws {
 
 @MainActor
 @Test
+func configurationOverlayOverridesBaseColorsBeforeFinalization() throws {
+  let baseURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-base-\(UUID().uuidString).conf")
+  let overlayURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-overlay-\(UUID().uuidString).conf")
+  try "foreground = #f4f4f5\nbackground = #18181b\n".write(
+    to: baseURL,
+    atomically: true,
+    encoding: .utf8
+  )
+  try "foreground = #202124\nbackground = #fafafa\n".write(
+    to: overlayURL,
+    atomically: true,
+    encoding: .utf8
+  )
+  defer {
+    try? FileManager.default.removeItem(at: baseURL)
+    try? FileManager.default.removeItem(at: overlayURL)
+  }
+
+  let runtime = try GhosttyRuntime(configPath: baseURL.path)
+  let config = try #require(
+    GhosttyRuntime.loadConfig(
+      configPath: baseURL.path,
+      overlayPath: overlayURL.path
+    )
+  )
+  defer { ghostty_config_free(config) }
+  withExtendedLifetime(runtime) {}
+
+  let foreground = try #require(configurationColor("foreground", in: config))
+  let background = try #require(configurationColor("background", in: config))
+
+  #expect(foreground.0 == 32)
+  #expect(foreground.1 == 33)
+  #expect(foreground.2 == 36)
+  #expect(background.0 == 250)
+  #expect(background.1 == 250)
+  #expect(background.2 == 250)
+}
+
+@MainActor
+@Test
+func runtimeAppliesAppOverlayBeforeCreatingNewSurface() throws {
+  let overlayURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-app-overlay-\(UUID().uuidString).conf")
+  try "foreground = #202124\nbackground = #fafafa\n".write(
+    to: overlayURL,
+    atomically: true,
+    encoding: .utf8
+  )
+  defer { try? FileManager.default.removeItem(at: overlayURL) }
+
+  let runtime = try GhosttyRuntime()
+  let applied = try runtime.applyConfigurationOverlay(at: overlayURL.path)
+  let controller = try GhosttyTerminalController(
+    runtime: runtime,
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      colorScheme: .light
+    )
+  )
+  let container = try GhosttyTerminalContainerView(controller: controller)
+
+  #expect(applied)
+  #expect(runtime.configurationOverlayPath == overlayURL.path)
+  #expect(controller.colorScheme == .light)
+  withExtendedLifetime(container) {}
+}
+
+@MainActor
+@Test
 func controllerAppliesAndRestoresLiveConfigurationOverlay() throws {
   let firstOverlayURL = FileManager.default.temporaryDirectory
     .appendingPathComponent("ghostty-overlay-\(UUID().uuidString).conf")
@@ -96,6 +169,23 @@ func controllerAppliesAndRestoresLiveConfigurationOverlay() throws {
   #expect(restoredRuntimeConfig)
   #expect(controller.configurationOverlayPath == nil)
   withExtendedLifetime(container) {}
+}
+
+private func configurationColor(
+  _ key: String,
+  in config: ghostty_config_t
+) -> (UInt8, UInt8, UInt8)? {
+  var color = ghostty_config_color_s()
+  let found = key.withCString { keyPointer in
+    ghostty_config_get(
+      config,
+      &color,
+      keyPointer,
+      UInt(key.utf8.count)
+    )
+  }
+  guard found else { return nil }
+  return (color.r, color.g, color.b)
 }
 
 @MainActor
@@ -702,12 +792,14 @@ func newTabPreservesConfigurationOverlay() throws {
   let session = try TerminalSession(
     primaryConfiguration: GhosttySurfaceConfiguration(
       workingDirectory: "/tmp",
-      configurationOverlayPath: overlayURL.path
+      configurationOverlayPath: overlayURL.path,
+      colorScheme: .light
     )
   )
   let tab = try session.openTab()
 
   #expect(tab.controller.configurationOverlayPath == overlayURL.path)
+  #expect(tab.controller.colorScheme == .light)
 }
 
 @Test
