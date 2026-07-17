@@ -18,6 +18,7 @@ public struct GhosttySurfaceConfiguration: Sendable {
   public var fontSize: Float
   public var initialScaleFactor: Double?
   public var initialSize: GhosttySurfaceInitialSize?
+  public var configurationOverlayPath: String?
 
   public init(
     workingDirectory: String? = nil,
@@ -26,7 +27,8 @@ public struct GhosttySurfaceConfiguration: Sendable {
     initialInput: String? = nil,
     fontSize: Float = 0,
     initialScaleFactor: Double? = nil,
-    initialSize: GhosttySurfaceInitialSize? = nil
+    initialSize: GhosttySurfaceInitialSize? = nil,
+    configurationOverlayPath: String? = nil
   ) {
     self.workingDirectory = workingDirectory
     self.command = command
@@ -35,5 +37,6 @@ public struct GhosttySurfaceConfiguration: Sendable {
     self.fontSize = fontSize
     self.initialScaleFactor = initialScaleFactor
     self.initialSize = initialSize
+    self.configurationOverlayPath = configurationOverlayPath
   }
 }

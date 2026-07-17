@@ -75,11 +75,15 @@ to the runtime. If `configPath` is omitted, Ghostty's default config files are
 loaded.
 
 Use `GhosttySurfaceConfiguration` for per-surface host overrides only:
-`workingDirectory`, `command`, `initialInput`, and explicit `fontSize`.
+`workingDirectory`, `command`, `initialInput`, explicit `fontSize`, and an
+optional `configurationOverlayPath`. The overlay is applied on top of the
+runtime's original config, so hosts can provide surface-specific colors without
+discarding user settings.
 
 The wrapper does not currently expose in-memory config strings, config
-diagnostics, or live config reload. If a host generates config dynamically, write
-it to a file and pass the path.
+diagnostics, or whole-runtime live config reload. A host can update a live
+surface overlay with `GhosttyTerminalController.applyConfigurationOverlay(at:)`.
+If a host generates config dynamically, write it to a file and pass the path.
 
 ## Shortcut Policy
 
