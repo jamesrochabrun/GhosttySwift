@@ -21,6 +21,7 @@ public final class GhosttySurfaceView: NSView {
   public let bridge: GhosttySurfaceBridge
   public var activeCursor: NSCursor = .iBeam
   public var closesHostWindowOnClose = true
+  public private(set) var configurationOverlayPath: String?
 
   private let runtime: GhosttyRuntime
   private let configuration: GhosttySurfaceConfiguration
@@ -51,6 +52,7 @@ public final class GhosttySurfaceView: NSView {
     self.runtime = runtime
     self.configuration = configuration
     self.bridge = bridge
+    self.configurationOverlayPath = configuration.configurationOverlayPath
 
     let initialFrame = configuration.initialSize.flatMap { size -> NSRect? in
       guard size.width > 0, size.height > 0 else { return nil }
@@ -176,6 +178,17 @@ public final class GhosttySurfaceView: NSView {
     )
   }
 
+  /// Replaces the live surface overlay, or restores the runtime config when `path` is `nil`.
+  ///
+  /// Returns `false` when the native surface has not been created.
+  @discardableResult
+  public func applyConfigurationOverlay(at path: String?) throws -> Bool {
+    guard let surfaceHandle else { return false }
+    try runtime.applyConfigurationOverlay(at: path, to: surfaceHandle)
+    configurationOverlayPath = path
+    return true
+  }
+
   private func installWindowObservers() {
     guard !isObservingWindowNotifications else { return }
     let center = NotificationCenter.default
@@ -245,6 +258,12 @@ public final class GhosttySurfaceView: NSView {
     }
 
     self.surfaceHandle = surface
+    if configuration.fontSize > 0 {
+      _ = performBindingAction("set_font_size:\(configuration.fontSize)")
+    }
+    if let configurationOverlayPath {
+      try applyConfigurationOverlay(at: configurationOverlayPath)
+    }
     GhosttyTrace.write("surface view createSurface success")
     configureSublayersForCleanResize()
     if let initialSize = configuration.initialSize,

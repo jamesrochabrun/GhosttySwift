@@ -128,7 +128,24 @@ let session = try TerminalSession(
 font family, palette, cursor settings, and Ghostty keybinds for every surface
 created from that runtime. `GhosttySurfaceConfiguration` remains the
 per-surface override layer for host concerns such as working directory, command,
-initial input, and explicit font size.
+initial input, explicit font size, and an optional configuration overlay.
+
+Use `configurationOverlayPath` when a host needs surface-specific settings
+without discarding the user's runtime config. The overlay can also be replaced
+while the terminal is running:
+
+```swift
+let controller = try GhosttyTerminalController(
+  configPath: userConfigPath,
+  configuration: .init(
+    workingDirectory: projectPath,
+    configurationOverlayPath: lightThemePath
+  )
+)
+
+try controller.applyConfigurationOverlay(at: darkThemePath)
+try controller.applyConfigurationOverlay(at: nil) // Restore the runtime config.
+```
 
 If `configPath` is `nil`, GhosttySwift asks Ghostty to load its default config
 files. GhosttySwift also lets Ghostty process recursive config includes before

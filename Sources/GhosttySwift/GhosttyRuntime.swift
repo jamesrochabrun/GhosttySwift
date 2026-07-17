@@ -10,6 +10,7 @@ public final class GhosttyRuntime {
     case resourcesDirectoryUnavailable
     case ghosttyInitFailed(Int32)
     case configCreationFailed
+    case configCloneFailed
     case appCreationFailed
 
     public var errorDescription: String? {
@@ -20,6 +21,8 @@ public final class GhosttyRuntime {
         return "ghostty_init failed with code \(code)."
       case .configCreationFailed:
         return "ghostty_config_new returned nil."
+      case .configCloneFailed:
+        return "ghostty_config_clone returned nil."
       case .appCreationFailed:
         return "ghostty_app_new returned nil."
       }
@@ -122,6 +125,31 @@ public final class GhosttyRuntime {
   public func tick() {
     guard let appHandleStorage else { return }
     ghostty_app_tick(appHandleStorage)
+  }
+
+  func applyConfigurationOverlay(
+    at path: String?,
+    to surface: ghostty_surface_t
+  ) throws {
+    guard let configHandle else {
+      throw RuntimeError.configCreationFailed
+    }
+
+    guard let path else {
+      ghostty_surface_update_config(surface, configHandle)
+      return
+    }
+
+    guard let overlaidConfig = ghostty_config_clone(configHandle) else {
+      throw RuntimeError.configCloneFailed
+    }
+    defer {
+      ghostty_config_free(overlaidConfig)
+    }
+
+    ghostty_config_load_file(overlaidConfig, path)
+    ghostty_config_finalize(overlaidConfig)
+    ghostty_surface_update_config(surface, overlaidConfig)
   }
 
   private func installApplicationObservers() {

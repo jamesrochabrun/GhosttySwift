@@ -14,6 +14,7 @@ func surfaceConfigurationDefaultsAreEmpty() {
   #expect(configuration.fontSize == 0)
   #expect(configuration.initialScaleFactor == nil)
   #expect(configuration.initialSize == nil)
+  #expect(configuration.configurationOverlayPath == nil)
 }
 
 @MainActor
@@ -54,6 +55,47 @@ func runtimeCanLoadConfigAsynchronously() async throws {
   let runtime = try await GhosttyRuntime.make(configPath: configURL.path)
 
   #expect(String(describing: type(of: runtime)).contains("GhosttyRuntime"))
+}
+
+@MainActor
+@Test
+func controllerAppliesAndRestoresLiveConfigurationOverlay() throws {
+  let firstOverlayURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-overlay-\(UUID().uuidString).conf")
+  let secondOverlayURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-overlay-\(UUID().uuidString).conf")
+  try "foreground = #202020\nbackground = #fafafa\n".write(
+    to: firstOverlayURL,
+    atomically: true,
+    encoding: .utf8
+  )
+  try "foreground = #f0f0f0\nbackground = #202020\n".write(
+    to: secondOverlayURL,
+    atomically: true,
+    encoding: .utf8
+  )
+  defer {
+    try? FileManager.default.removeItem(at: firstOverlayURL)
+    try? FileManager.default.removeItem(at: secondOverlayURL)
+  }
+
+  let controller = try GhosttyTerminalController(
+    configuration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      fontSize: 12,
+      configurationOverlayPath: firstOverlayURL.path
+    )
+  )
+  let container = try GhosttyTerminalContainerView(controller: controller)
+
+  #expect(controller.configurationOverlayPath == firstOverlayURL.path)
+  let appliedSecondOverlay = try controller.applyConfigurationOverlay(at: secondOverlayURL.path)
+  #expect(appliedSecondOverlay)
+  #expect(controller.configurationOverlayPath == secondOverlayURL.path)
+  let restoredRuntimeConfig = try controller.applyConfigurationOverlay(at: nil)
+  #expect(restoredRuntimeConfig)
+  #expect(controller.configurationOverlayPath == nil)
+  withExtendedLifetime(container) {}
 }
 
 @MainActor
@@ -627,6 +669,45 @@ func panelConfigurationSeedsInitialScaleFactorFromActiveWindow() {
   #expect(configuration.workingDirectory == "/tmp")
   #expect(configuration.fontSize == 13)
   #expect(configuration.initialScaleFactor == 1.5)
+}
+
+@Test
+func panelConfigurationPreservesConfigurationOverlay() {
+  let configuration = TerminalSession.resolvedPanelConfiguration(
+    configuration: nil,
+    defaultConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      configurationOverlayPath: "/tmp/light.conf"
+    ),
+    activeWindowScaleFactor: nil
+  )
+
+  #expect(configuration.configurationOverlayPath == "/tmp/light.conf")
+}
+
+@MainActor
+@Test
+func newTabPreservesConfigurationOverlay() throws {
+  let overlayURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("ghostty-overlay-\(UUID().uuidString).conf")
+  try "foreground = #202020\nbackground = #fafafa\n".write(
+    to: overlayURL,
+    atomically: true,
+    encoding: .utf8
+  )
+  defer {
+    try? FileManager.default.removeItem(at: overlayURL)
+  }
+
+  let session = try TerminalSession(
+    primaryConfiguration: GhosttySurfaceConfiguration(
+      workingDirectory: "/tmp",
+      configurationOverlayPath: overlayURL.path
+    )
+  )
+  let tab = try session.openTab()
+
+  #expect(tab.controller.configurationOverlayPath == overlayURL.path)
 }
 
 @Test

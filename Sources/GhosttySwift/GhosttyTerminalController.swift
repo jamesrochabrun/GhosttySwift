@@ -88,6 +88,23 @@ public final class GhosttyTerminalController {
     bridge.surfaceView?.foregroundProcessID
   }
 
+  public var configurationOverlayPath: String? {
+    if let surfaceView = bridge.surfaceView {
+      surfaceView.configurationOverlayPath
+    } else {
+      configuration.configurationOverlayPath
+    }
+  }
+
+  /// Replaces the live surface overlay, or restores the runtime config when `path` is `nil`.
+  ///
+  /// Returns `false` until the controller has an attached native surface.
+  @discardableResult
+  public func applyConfigurationOverlay(at path: String?) throws -> Bool {
+    guard let surfaceView = bridge.surfaceView else { return false }
+    return try surfaceView.applyConfigurationOverlay(at: path)
+  }
+
   public func sendText(_ text: String) {
     bridge.surfaceView?.sendText(text)
   }
