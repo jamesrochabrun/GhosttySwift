@@ -1,5 +1,10 @@
 import Foundation
 
+public enum GhosttyColorScheme: Equatable, Sendable {
+  case light
+  case dark
+}
+
 public struct GhosttySurfaceInitialSize: Equatable, Sendable {
   public var width: Double
   public var height: Double
@@ -19,6 +24,7 @@ public struct GhosttySurfaceConfiguration: Sendable {
   public var initialScaleFactor: Double?
   public var initialSize: GhosttySurfaceInitialSize?
   public var configurationOverlayPath: String?
+  public var colorScheme: GhosttyColorScheme?
 
   public init(
     workingDirectory: String? = nil,
@@ -28,7 +34,8 @@ public struct GhosttySurfaceConfiguration: Sendable {
     fontSize: Float = 0,
     initialScaleFactor: Double? = nil,
     initialSize: GhosttySurfaceInitialSize? = nil,
-    configurationOverlayPath: String? = nil
+    configurationOverlayPath: String? = nil,
+    colorScheme: GhosttyColorScheme? = nil
   ) {
     self.workingDirectory = workingDirectory
     self.command = command
@@ -38,5 +45,6 @@ public struct GhosttySurfaceConfiguration: Sendable {
     self.initialScaleFactor = initialScaleFactor
     self.initialSize = initialSize
     self.configurationOverlayPath = configurationOverlayPath
+    self.colorScheme = colorScheme
   }
 }

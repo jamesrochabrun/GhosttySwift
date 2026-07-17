@@ -105,6 +105,17 @@ public final class GhosttyTerminalController {
     return try surfaceView.applyConfigurationOverlay(at: path)
   }
 
+  public var colorScheme: GhosttyColorScheme? {
+    bridge.surfaceView?.colorScheme ?? configuration.colorScheme
+  }
+
+  /// Updates Ghostty's conditional theme state and notifies terminal programs
+  /// that subscribe to live color-scheme reports.
+  @discardableResult
+  public func setColorScheme(_ colorScheme: GhosttyColorScheme) -> Bool {
+    bridge.surfaceView?.setColorScheme(colorScheme) ?? false
+  }
+
   public func sendText(_ text: String) {
     bridge.surfaceView?.sendText(text)
   }

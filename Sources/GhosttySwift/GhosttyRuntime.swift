@@ -32,9 +32,11 @@ public final class GhosttyRuntime {
   static let resourcesEnvironmentKey = "GHOSTTY_RESOURCES_DIR"
   private static let initResult: Int32 = Int32(ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv))
 
+  private let configPath: String?
   private var configHandle: ghostty_config_t?
   private var appHandleStorage: ghostty_app_t?
   private var isObservingApplicationNotifications = false
+  public private(set) var configurationOverlayPath: String?
 
   var appHandle: ghostty_app_t {
     guard let appHandleStorage else {
@@ -52,12 +54,17 @@ public final class GhosttyRuntime {
       throw RuntimeError.configCreationFailed
     }
 
-    return try GhosttyRuntime(adoptingFinalizedConfig: loadedConfig.handle)
+    return try GhosttyRuntime(
+      adoptingFinalizedConfig: loadedConfig.handle,
+      configPath: configPath
+    )
   }
 
   public init(configPath: String? = nil) throws {
+    self.configPath = configPath
     self.configHandle = nil
     self.appHandleStorage = nil
+    self.configurationOverlayPath = nil
 
     try Self.configureBundledResources()
     try Self.ensureGhosttyInitialized()
@@ -69,9 +76,14 @@ public final class GhosttyRuntime {
     try initialize(withFinalizedConfig: config)
   }
 
-  private init(adoptingFinalizedConfig config: ghostty_config_t) throws {
+  private init(
+    adoptingFinalizedConfig config: ghostty_config_t,
+    configPath: String?
+  ) throws {
+    self.configPath = configPath
     self.configHandle = nil
     self.appHandleStorage = nil
+    self.configurationOverlayPath = nil
 
     try initialize(withFinalizedConfig: config)
   }
@@ -127,6 +139,35 @@ public final class GhosttyRuntime {
     ghostty_app_tick(appHandleStorage)
   }
 
+  /// Replaces the app-level configuration overlay for current and future surfaces.
+  ///
+  /// App-level application is important for terminal programs that query the
+  /// foreground and background colors during startup: new surfaces inherit the
+  /// overlaid configuration before their child process is launched.
+  @discardableResult
+  public func applyConfigurationOverlay(at path: String?) throws -> Bool {
+    guard configurationOverlayPath != path else { return false }
+    guard let appHandleStorage else {
+      throw RuntimeError.appCreationFailed
+    }
+    guard let updatedConfig = Self.loadConfig(
+      configPath: configPath,
+      overlayPath: path
+    ) else {
+      throw RuntimeError.configCreationFailed
+    }
+
+    ghostty_app_update_config(appHandleStorage, updatedConfig)
+
+    let previousConfig = configHandle
+    configHandle = updatedConfig
+    configurationOverlayPath = path
+    if let previousConfig {
+      ghostty_config_free(previousConfig)
+    }
+    return true
+  }
+
   func applyConfigurationOverlay(
     at path: String?,
     to surface: ghostty_surface_t
@@ -140,15 +181,16 @@ public final class GhosttyRuntime {
       return
     }
 
-    guard let overlaidConfig = ghostty_config_clone(configHandle) else {
-      throw RuntimeError.configCloneFailed
+    guard let overlaidConfig = Self.loadConfig(
+      configPath: configPath,
+      overlayPath: path
+    ) else {
+      throw RuntimeError.configCreationFailed
     }
     defer {
       ghostty_config_free(overlaidConfig)
     }
 
-    ghostty_config_load_file(overlaidConfig, path)
-    ghostty_config_finalize(overlaidConfig)
     ghostty_surface_update_config(surface, overlaidConfig)
   }
 
@@ -209,7 +251,10 @@ public final class GhosttyRuntime {
     }.value
   }
 
-  private nonisolated static func loadConfig(configPath: String?) -> ghostty_config_t? {
+  nonisolated static func loadConfig(
+    configPath: String?,
+    overlayPath: String? = nil
+  ) -> ghostty_config_t? {
     guard let config = ghostty_config_new() else {
       return nil
     }
@@ -227,6 +272,10 @@ public final class GhosttyRuntime {
 
     ghostty_config_load_recursive_files(config)
     #endif
+
+    if let overlayPath {
+      ghostty_config_load_file(config, overlayPath)
+    }
 
     ghostty_config_finalize(config)
     return config

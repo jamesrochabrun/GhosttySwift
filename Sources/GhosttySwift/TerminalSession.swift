@@ -484,7 +484,8 @@ public final class TerminalSession {
     return GhosttySurfaceConfiguration(
       workingDirectory: tab.controller.workingDirectory ?? tab.controller.configuration.workingDirectory,
       fontSize: tab.controller.configuration.fontSize,
-      configurationOverlayPath: tab.controller.configurationOverlayPath
+      configurationOverlayPath: tab.controller.configurationOverlayPath,
+      colorScheme: tab.controller.colorScheme
     )
   }
 
