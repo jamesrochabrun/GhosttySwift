@@ -70,6 +70,10 @@ jobs:
         with:
           install: true
 
+      - name: Checkout Ghostty source
+        if: ${{ inputs.binary_source == 'build' }}
+        run: git submodule update --init --recursive
+
       - name: Prepare carry-forward binary release
         if: ${{ inputs.binary_source == 'carry-forward' }}
         id: prepare-carry-forward

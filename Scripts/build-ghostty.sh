@@ -15,13 +15,13 @@ else
   exit 1
 fi
 
-if [[ ! -d "$GHOSTTY_DIR" ]]; then
-  echo "Missing upstream Ghostty checkout at $GHOSTTY_DIR" >&2
+if [[ ! -f "$GHOSTTY_DIR/build.zig" ]]; then
+  echo "Missing upstream Ghostty checkout at $GHOSTTY_DIR; initialize the submodule first." >&2
   exit 1
 fi
 
 pushd "$GHOSTTY_DIR" >/dev/null
-"${ZIG[@]}" build -Demit-macos-app=false -Demit-xcframework=true
+"${ZIG[@]}" build -Doptimize=ReleaseFast -Demit-macos-app=false -Demit-xcframework=true
 popd >/dev/null
 
 mkdir -p "$FRAMEWORKS_DIR"
@@ -35,6 +35,29 @@ if [[ -f "$MACOS_SLICE/ghostty-internal.a" ]]; then
   plutil -replace AvailableLibraries.2.BinaryPath -string libghostty-internal.a "$INFO_PLIST"
   plutil -replace AvailableLibraries.2.LibraryPath -string libghostty-internal.a "$INFO_PLIST"
 fi
+
+MACOS_LIBRARY="$MACOS_SLICE/libghostty-internal.a"
+if [[ ! -f "$MACOS_LIBRARY" ]]; then
+  echo "Missing macOS Ghostty library at $MACOS_LIBRARY" >&2
+  exit 1
+fi
+
+VERIFY_DIR="$(mktemp -d)"
+trap 'rm -rf "$VERIFY_DIR"' EXIT
+xcrun swiftc \
+  -I "$MACOS_SLICE/Headers" \
+  -L "$MACOS_SLICE" \
+  -lghostty-internal \
+  -lc++ \
+  -framework AppKit \
+  -framework Carbon \
+  -framework CoreVideo \
+  -framework IOSurface \
+  -framework Metal \
+  -framework QuartzCore \
+  "$ROOT/Scripts/verify-ghostty-build-mode.swift" \
+  -o "$VERIFY_DIR/verify-ghostty-build-mode"
+"$VERIFY_DIR/verify-ghostty-build-mode"
 
 mkdir -p "$RESOURCES_DIR"
 rm -rf "$RESOURCES_DIR/share"
