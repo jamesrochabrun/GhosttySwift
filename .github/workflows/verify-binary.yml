@@ -8,6 +8,7 @@ on:
       - "mise.toml"
       - "Scripts/build-ghostty.sh"
       - "Scripts/prepare-binary-release.sh"
+      - "Scripts/verify-ghostty-build-mode.swift"
       - "ThirdParty/ghostty"
   workflow_dispatch:
 

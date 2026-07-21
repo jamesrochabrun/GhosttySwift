@@ -42,10 +42,22 @@ if [[ ! -f "$MACOS_LIBRARY" ]]; then
   exit 1
 fi
 
-if strings "$MACOS_LIBRARY" | grep -F "cannot be represented in type" >/dev/null; then
-  echo "ERROR: libghostty appears to be a Debug/ReleaseSafe build" >&2
-  exit 1
-fi
+VERIFY_DIR="$(mktemp -d)"
+trap 'rm -rf "$VERIFY_DIR"' EXIT
+xcrun swiftc \
+  -I "$MACOS_SLICE/Headers" \
+  -L "$MACOS_SLICE" \
+  -lghostty-internal \
+  -lc++ \
+  -framework AppKit \
+  -framework Carbon \
+  -framework CoreVideo \
+  -framework IOSurface \
+  -framework Metal \
+  -framework QuartzCore \
+  "$ROOT/Scripts/verify-ghostty-build-mode.swift" \
+  -o "$VERIFY_DIR/verify-ghostty-build-mode"
+"$VERIFY_DIR/verify-ghostty-build-mode"
 
 mkdir -p "$RESOURCES_DIR"
 rm -rf "$RESOURCES_DIR/share"
