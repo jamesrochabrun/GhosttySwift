@@ -467,18 +467,31 @@ private func ghosttyRuntimeReadClipboard(
 
   if Thread.isMainThread {
     return MainActor.assumeIsolated {
-      completeClipboardRead(userdataBits: userdataBits, location: location, requestBits: requestBits)
+      let mainUserdata = userdataBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
+      guard let bridge = GhosttyRuntime.bridge(from: mainUserdata) else { return false }
+      return completeClipboardRead(bridge: bridge, location: location, requestBits: requestBits)
     }
   }
 
-  guard userdataBits != nil, requestBits != nil else { return false }
+  guard let userdata, requestBits != nil else { return false }
+  // Ghostty stores an unretained bridge pointer. Keep the bridge alive until
+  // the queued completion has resolved its weak surface reference.
+  let retainedBridgeBits = UInt(
+    bitPattern: Unmanaged<GhosttySurfaceBridge>.fromOpaque(userdata).retain().toOpaque()
+  )
 
   // Returning true transfers the request to the embedder. Complete it even
   // when the main-thread pasteboard lookup finds no text so Ghostty can free it.
   DispatchQueue.main.async {
     MainActor.assumeIsolated {
+      guard let retainedBridgePointer = UnsafeMutableRawPointer(bitPattern: retainedBridgeBits) else {
+        return
+      }
+      let bridge = Unmanaged<GhosttySurfaceBridge>
+        .fromOpaque(retainedBridgePointer)
+        .takeRetainedValue()
       _ = completeClipboardRead(
-        userdataBits: userdataBits,
+        bridge: bridge,
         location: location,
         requestBits: requestBits,
         completeEmptyRequest: true
@@ -576,18 +589,14 @@ private func ghosttyRuntimeCloseSurface(
 
 @MainActor
 private func completeClipboardRead(
-  userdataBits: UInt?,
+  bridge: GhosttySurfaceBridge,
   location: ghostty_clipboard_e,
   requestBits: UInt?,
   completeEmptyRequest: Bool = false
 ) -> Bool {
-  let userdata = userdataBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
   let request = requestBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
 
-  guard
-    let bridge = GhosttyRuntime.bridge(from: userdata),
-    let surface = bridge.surfaceView?.surfaceHandle
-  else {
+  guard let surface = bridge.surfaceView?.surfaceHandle else {
     return false
   }
 

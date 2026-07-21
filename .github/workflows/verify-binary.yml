@@ -1,0 +1,44 @@
+name: Verify Ghostty binary
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-binary.yml"
+      - ".gitmodules"
+      - "mise.toml"
+      - "Scripts/build-ghostty.sh"
+      - "Scripts/prepare-binary-release.sh"
+      - "ThirdParty/ghostty"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-ghostty-binary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ReleaseFast xcframework
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+
+      - name: Build GhosttyKit
+        run: Scripts/build-ghostty.sh
+
+      - name: Report macOS archive size
+        run: |
+          archive="Frameworks/GhosttyKit.xcframework/macos-arm64_x86_64/libghostty-internal.a"
+          test -f "$archive"
+          ls -lh "$archive"
