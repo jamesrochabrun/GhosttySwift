@@ -471,11 +471,22 @@ private func ghosttyRuntimeReadClipboard(
     }
   }
 
-  return DispatchQueue.main.sync {
+  guard userdataBits != nil, requestBits != nil else { return false }
+
+  // Returning true transfers the request to the embedder. Complete it even
+  // when the main-thread pasteboard lookup finds no text so Ghostty can free it.
+  DispatchQueue.main.async {
     MainActor.assumeIsolated {
-      completeClipboardRead(userdataBits: userdataBits, location: location, requestBits: requestBits)
+      _ = completeClipboardRead(
+        userdataBits: userdataBits,
+        location: location,
+        requestBits: requestBits,
+        completeEmptyRequest: true
+      )
     }
   }
+
+  return true
 }
 
 private func ghosttyRuntimeConfirmReadClipboard(
@@ -567,16 +578,25 @@ private func ghosttyRuntimeCloseSurface(
 private func completeClipboardRead(
   userdataBits: UInt?,
   location: ghostty_clipboard_e,
-  requestBits: UInt?
+  requestBits: UInt?,
+  completeEmptyRequest: Bool = false
 ) -> Bool {
   let userdata = userdataBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
   let request = requestBits.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }
 
   guard
     let bridge = GhosttyRuntime.bridge(from: userdata),
-    let surface = bridge.surfaceView?.surfaceHandle,
-    let value = NSPasteboard.ghostty(location)?.getOpinionatedStringContents()
+    let surface = bridge.surfaceView?.surfaceHandle
   else {
+    return false
+  }
+
+  guard let value = NSPasteboard.ghostty(location)?.getOpinionatedStringContents() else {
+    if completeEmptyRequest {
+      "".withCString { pointer in
+        ghostty_surface_complete_clipboard_request(surface, pointer, request, false)
+      }
+    }
     return false
   }
 

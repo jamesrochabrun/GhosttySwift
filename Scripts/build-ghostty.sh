@@ -15,13 +15,13 @@ else
   exit 1
 fi
 
-if [[ ! -d "$GHOSTTY_DIR" ]]; then
-  echo "Missing upstream Ghostty checkout at $GHOSTTY_DIR" >&2
+if [[ ! -f "$GHOSTTY_DIR/build.zig" ]]; then
+  echo "Missing upstream Ghostty checkout at $GHOSTTY_DIR; initialize the submodule first." >&2
   exit 1
 fi
 
 pushd "$GHOSTTY_DIR" >/dev/null
-"${ZIG[@]}" build -Demit-macos-app=false -Demit-xcframework=true
+"${ZIG[@]}" build -Doptimize=ReleaseFast -Demit-macos-app=false -Demit-xcframework=true
 popd >/dev/null
 
 mkdir -p "$FRAMEWORKS_DIR"
@@ -34,6 +34,17 @@ if [[ -f "$MACOS_SLICE/ghostty-internal.a" ]]; then
   mv "$MACOS_SLICE/ghostty-internal.a" "$MACOS_SLICE/libghostty-internal.a"
   plutil -replace AvailableLibraries.2.BinaryPath -string libghostty-internal.a "$INFO_PLIST"
   plutil -replace AvailableLibraries.2.LibraryPath -string libghostty-internal.a "$INFO_PLIST"
+fi
+
+MACOS_LIBRARY="$MACOS_SLICE/libghostty-internal.a"
+if [[ ! -f "$MACOS_LIBRARY" ]]; then
+  echo "Missing macOS Ghostty library at $MACOS_LIBRARY" >&2
+  exit 1
+fi
+
+if strings "$MACOS_LIBRARY" | grep -F "cannot be represented in type" >/dev/null; then
+  echo "ERROR: libghostty appears to be a Debug/ReleaseSafe build" >&2
+  exit 1
 fi
 
 mkdir -p "$RESOURCES_DIR"
